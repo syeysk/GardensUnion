@@ -66,11 +66,11 @@ class Human(models.Model):
     birth_year = models.IntegerField('Год рождения', default=0)
     birth_month = models.IntegerField('Месяц рождения', default=0)
     birth_day = models.IntegerField('День рождения', default=0)
-    circle = models.IntegerField('Круг', options=CIRCLES, default=CIRCLE_DEVELOP)
-    sex = models.IntegerField('Пол', options=SEXES, default=SEX_UNKNOWN)
+    circle = models.IntegerField('Круг', choices=CIRCLES, default=CIRCLE_DEVELOP)
+    sex = models.IntegerField('Пол', choices=SEXES, default=SEX_UNKNOWN)
     closing = models.IntegerField('Близость', default=0)
-    book_contact_type = models.IntegerField('Тип контакта', options=BOOK_CONTACT_TYPES, default=BOOK_CONTACT_TYPE_UNKNOWN)
-    book_did = models.IntegerField('', options=BOOK_DID, default=BOOK_DID_UNKNOWN)
+    book_contact_type = models.IntegerField('Тип контакта', choices=BOOK_CONTACT_TYPES, default=BOOK_CONTACT_TYPE_UNKNOWN)
+    book_did = models.IntegerField('', choices=BOOK_DID, default=BOOK_DID_UNKNOWN)
 
     sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans')
 
@@ -90,7 +90,7 @@ class ContactType(models.Model):
 class Contact(models.Model):
     value = models.CharField('Значение', max_length=100, blank=True)
     type = models.ForeignKey(ContactType, on_delete=models.CASCADE)
-    status = models.IntegerField('Статус', options=CONTACT_STATUSES, default=CONTACT_STATUS_ACTIVE)
+    status = models.IntegerField('Статус', choices=CONTACT_STATUSES, default=CONTACT_STATUS_ACTIVE)
     data = models.JSONField(default=dict)
 
     class Model:
@@ -179,5 +179,5 @@ class HumanRelationType(models.Model):
 
 class LinkHumanHuman(models.Model):
     human = models.ForeignKey(Human, on_delete=models.CASCADE)
-    human_linked = models.ForeignKey(Human, on_delete=models.CASCADE)
+    human_linked = models.ForeignKey(Human, on_delete=models.CASCADE, related_name='humans_linked')
     relation = models.ForeignKey(HumanRelationType, on_delete=models.CASCADE)
