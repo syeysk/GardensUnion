@@ -1,34 +1,36 @@
+import os
 import sys
 from datetime import date
 from pathlib import Path
 
 import gi
-import db_alch as db
-from db_alch import (
+from jinja2 import Template
+
+gi.require_version('Gtk', '4.0')
+from gi.repository import GLib, Gio, Gtk, GObject, Gdk
+
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings') 
+django.setup()
+
+from django.conf import settings
+from django.db.models import Q
+from db.models import (
     BOOK_CONTACT_TYPES,
     BOOK_DID,
     CIRCLES,
     SEXES,
     CONTACT_STATUSES,
 )
-from api import Config, get_engine_and_create_all, create_first_rows
-from jinja2 import Template
-from sqlalchemy import select, delete, or_
-from sqlalchemy.orm import Session
-
-gi.require_version('Gtk', '4.0')
-from gi.repository import GLib, Gio, Gtk, GObject, Gdk
-from circle_map import CircleMapWindow
-from django.conf import settings
 from db import models
+from circle_map import CircleMapWindow
 
-BASE_DIR = Path(__file__).resolve().parent
 XML_DIR = settings.BASE_REPO_DIR / 'xml'
 MENU_MAIN_PATH = XML_DIR / 'menu_main.xml'
-config = Config(BASE_DIR)
 
 FIELD_ID_SIZE = 30
-session = None
+
 
 class EntityEditWindow(Gtk.ApplicationWindow):
     entity_name = None
@@ -38,8 +40,7 @@ class EntityEditWindow(Gtk.ApplicationWindow):
         super().__init__(*args, **kwargs)
         self.entity = None
         if entity_id:
-            query = select(self.entity_class).where(self.entity_class.id == entity_id)
-            self.entity = session.scalars(query).first()
+            self.entity = self.entity_class.objects.filter(pk=entity_id).first()
 
         self.builder = WindowBuilder(XML_DIR / f'{self.entity_name}.xml', {'entity': self.entity}, parent_window=self)
         self.set_child(self.builder.root_widget)
@@ -70,12 +71,11 @@ class EntityEditWindow(Gtk.ApplicationWindow):
         fields = {name: value}
         if self.entity:
             setattr(self.entity, name, value)
-            session.commit()
+            self.entity.save()
             self.emit('entity_updated', self.entity.id, name, value)
         else:
             self.entity = self.entity_class(**fields)
-            session.add(self.entity)
-            session.commit()
+            self.entity.save()
             self.builder.id_value.set_text(str(self.entity.id))            
             self.emit('entity_added', self.entity.id)
 
@@ -207,37 +207,38 @@ class LinkedEntityColumnView(EntityColumnView):
             self.update_list()
 
     def update_list(self):
+        entity_id = self.parent_window.entity.id
+        query = self.linking_table.objects
         if self.same:
-            condition = or_(
-                getattr(self.linking_table, f'{self.item_main}_id')==self.parent_window.entity.id,
-                getattr(self.linking_table, f'{self.item_slave}_id')==self.parent_window.entity.id,
-            )
+            query = query.filter(Q(**{f'{self.item_main}_id': entity_id}) | Q(**{f'{self.item_slave}_id': entity_id}))
         else:
-            condition = getattr(self.linking_table, f'{self.item_main}_id')==self.parent_window.entity.id
+            query = query.filter(**{f'{self.item_main}_id': entity_id})
 
-        query = select(self.linking_table).where(condition)
-        for link in session.scalars(query):
+        for link in query.all():
             entity = getattr(link, self.item_slave)
-            if self.same and entity.id == self.parent_window.entity.id:
+            if self.same and entity.id == entity_id:
                 entity = getattr(link, self.item_main)
 
             self.append(entity)
 
     def on_entity_added(self, widget, linked_entity_id):
-        cond_left = getattr(self.linking_table, f'{self.item_main}_id') == self.parent_window.entity.id
-        cond_right = getattr(self.linking_table, f'{self.item_slave}_id') == linked_entity_id
-        if not session.scalar(select(self.linking_table).where(cond_left, cond_right)):
+        condition = {
+            f'{self.item_main}_id': self.parent_window.entity.id,
+            f'{self.item_slave}_id': linked_entity_id,
+        }
+        if not self.linking_table.objects.filter(**condition).first():
             kwargs = {f'{self.item_main}_id': self.parent_window.entity.id, f'{self.item_slave}_id': linked_entity_id}
-            session.add(self.linking_table(**kwargs))
-            session.commit()
+            new_entity = self.linking_table(**kwargs)
+            new_entity.save()
             self.clear()
             self.update_list()
 
     def on_entity_deleted(self, entity_id):
-        cond_left = getattr(self.linking_table, f'{self.item_main}_id') == self.parent_window.entity.id
-        cond_right = getattr(self.linking_table, f'{self.item_slave}_id') == entity_id
-        session.execute(delete(self.linking_table).where(cond_left, cond_right))
-        session.commit()
+        condition = {
+            f'{self.item_main}_id': self.parent_window.entity.id,
+            f'{self.item_slave}_id': entity_id,
+        }
+        self.linking_table.objects.filter(**condition).delete()
         self.clear()
         self.update_list()
 
@@ -256,7 +257,7 @@ class EntityListWindow(Gtk.ApplicationWindow):
         super().__init__(*args, **kwargs)
         
         self.entity_type_class = entity_type_class
-        self.entity_db_class = getattr(db, entity_type_class.__gtype_name__)
+        self.entity_db_class = getattr(models, entity_type_class.__gtype_name__)
 
         box = Gtk.Box()
         box.props.margin_top = 6
@@ -279,13 +280,12 @@ class EntityListWindow(Gtk.ApplicationWindow):
         self.update_list()
 
     def on_entity_deleted(self, entity_id):
-        session.execute(delete(self.entity_db_class).where(self.entity_db_class.id==entity_id))
-        session.commit()
+        self.entity_db_class.objects.filter(pk=entity_id).delete()
         self.column_view.clear()
         self.update_list()
 
     def update_list(self):
-        for entity in session.scalars(select(self.entity_db_class)):
+        for entity in self.entity_db_class.objects.all():
             self.column_view.append(entity)
 
 
@@ -294,7 +294,7 @@ class EntityListToSelectWindow(Gtk.ApplicationWindow):
         super().__init__(*args, **kwargs)
 
         self.entity_type_class = entity_type_class
-        self.entity_db_class = getattr(db, entity_type_class.__gtype_name__)
+        self.entity_db_class = getattr(models, entity_type_class.__gtype_name__)
 
         box = Gtk.Box()
         box.props.margin_top = 6
@@ -309,7 +309,7 @@ class EntityListToSelectWindow(Gtk.ApplicationWindow):
             self.on_entity_selected,
         )
         box.append(self.column_view.box)
-        for entity in session.scalars(select(self.entity_db_class)):
+        for entity in self.entity_db_class.objects.all():
             self.column_view.append(entity)
 
     @GObject.Signal(arg_types=(int,))
@@ -407,14 +407,14 @@ class WindowBuilder:
             elif tag == 'EntityColumnView':
                 kwargs['parent_window'] = self.parent_window
                 kwargs['item_type'] = globals()[node.attrib.pop('item_type')]
-                kwargs['linking_table'] = getattr(db, node.attrib.pop('linking_table'))
+                kwargs['linking_table'] = getattr(models, node.attrib.pop('linking_table'))
                 kwargs['item_main'] = node.attrib.pop('item_main')
                 kwargs['item_slave'] = node.attrib.pop('item_slave')
                 if 'same' in node.attrib:
                     kwargs['same'] = True
                     node.attrib.pop('same')
             elif tag == 'Picture':
-                kwargs['filename'] = str(BASE_DIR / node.attrib.pop('filename'))
+                kwargs['filename'] = str(settings.BASE_REPO_DIR / node.attrib.pop('filename'))
             elif tag == 'Box':
                 kwargs['orientation'] = getattr(Gtk.Orientation, node.attrib.pop('orientation', 'VERTICAL'))
             
@@ -469,7 +469,7 @@ class WindowBuilder:
 
 class HumanWindow(EntityEditWindow):
     entity_name = 'human'
-    entity_class = db.Human
+    entity_class = models.Human
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -525,7 +525,7 @@ class HumanWindow(EntityEditWindow):
         builder.circle_entry.props.selected = (self.entity.circle - 1) if self.entity else 0
         builder.circle_entry.connect('notify::selected-item', self.on_change_any_data_dropdown, 'circle')
 
-        for sector in session.scalars(select(db.Sector)):
+        for sector in models.Sector.objects.all():
             builder.sector_entry.append(item_id=sector.id, item_name=sector.name)
 
         builder.sector_entry.props.selected = (self.entity.sector_id - 1) if self.entity else 0
@@ -564,7 +564,7 @@ class HumanWindow(EntityEditWindow):
 
 class ContactTypeWindow(EntityEditWindow):
     entity_name = 'contact_type'
-    entity_class = db.ContactType
+    entity_class = models.ContactType
 
     def __init__(self, *args,  **kwargs):
         super().__init__(*args, **kwargs)
@@ -573,7 +573,7 @@ class ContactTypeWindow(EntityEditWindow):
 
 class SectorWindow(EntityEditWindow):
     entity_name = 'sector'
-    entity_class = db.Sector
+    entity_class = models.Sector
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -582,7 +582,7 @@ class SectorWindow(EntityEditWindow):
 
 class CommunityWindow(EntityEditWindow):
     entity_name = 'community'
-    entity_class = db.Community
+    entity_class = models.Community
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -591,7 +591,7 @@ class CommunityWindow(EntityEditWindow):
 
 class TaskWindow(EntityEditWindow):
     entity_name = 'task'
-    entity_class = db.Task
+    entity_class = models.Task
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -599,7 +599,7 @@ class TaskWindow(EntityEditWindow):
         self.builder.has_done.connect('toggled', self.on_change_any_data, 'has_done')
         self.builder.has_done.props.active = self.entity.has_done
 
-        for task_aim in session.scalars(select(db.TaskAim)):
+        for task_aim in models.TaskAim.objects.all():
             self.builder.aim_entry.append(item_id=task_aim.id, item_name=task_aim.name)
 
         self.builder.aim_entry.props.selected = (self.entity.aim.id - 1) if self.entity else 0
@@ -613,7 +613,7 @@ class TaskWindow(EntityEditWindow):
 
 class TaskAimWindow(EntityEditWindow):
     entity_name = 'task_aim'
-    entity_class = db.TaskAim
+    entity_class = models.TaskAim
 
     def __init__(self, *args,  **kwargs):
         super().__init__(*args, **kwargs)
@@ -622,7 +622,7 @@ class TaskAimWindow(EntityEditWindow):
 
 class MeetingWindow(EntityEditWindow):
     entity_name = 'meeting'
-    entity_class = db.Meeting
+    entity_class = models.Meeting
 
     def __init__(self, *args,  **kwargs):
         super().__init__(*args, **kwargs)
@@ -632,13 +632,13 @@ class MeetingWindow(EntityEditWindow):
 
 class ContactWindow(EntityEditWindow):
     entity_name = 'contact'
-    entity_class = db.Contact
+    entity_class = models.Contact
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_default_size(400, 600)
         self.builder.value_entry.connect('changed', self.on_change_any_data, 'value')
-        for contact_type in session.scalars(select(db.ContactType)):
+        for contact_type in models.ContactType.objects.all():
             self.builder.type_entry.append(item_id=contact_type.id, item_name=contact_type.name)
 
         self.builder.type_entry.props.selected = (self.entity.type_id - 1) if self.entity else 0
@@ -651,7 +651,7 @@ class ContactWindow(EntityEditWindow):
         self.builder.status_entry.connect('notify::selected-item', self.on_change_any_data_dropdown, 'status')
         
         from adapter import TGAdapter
-        TGAdapter(self.builder.adapter_area, self.get_contact, session)
+        TGAdapter(self.builder.adapter_area, self.get_contact)
 
     def get_contact(self):
         return self.entity
@@ -945,7 +945,7 @@ class AppWindow(Gtk.ApplicationWindow):
         self.main_box.append(self.entities_column_view.box)
 
     def on_show_map(self, action, value):
-        window = CircleMapWindow(session, transient_for=self, title='Circle Map', modal=True)
+        window = CircleMapWindow(transient_for=self, title='Circle Map', modal=True)
         window.present()
 
     def on_show_adding_entity(self, action, value=None):
@@ -959,7 +959,7 @@ class AppWindow(Gtk.ApplicationWindow):
         self.update_entity_list(entity_db_class)
 
     def update_entity_list(self, entity_db_class):
-        for entity in entity_db_class.objects.all(): #for entity in session.scalars(select(entity_db_class)):
+        for entity in entity_db_class.objects.all():
             self.entities_column_view.append(entity)
 
     def on_export(self, action):
@@ -1020,14 +1020,13 @@ class MyApplication(Gtk.Application):
         super().__init__(application_id='org.syeysk.HumEnv')
         GLib.set_application_name('Human Environment Builder')
         
-        action_open_db = Gio.SimpleAction.new_stateful('open_db', GLib.VariantType.new("s"), GLib.Variant('s', config.uuid))
-        action_open_db.connect('activate', self.open_db)
-        self.add_action(action_open_db)
+        #action_open_db = Gio.SimpleAction.new_stateful('open_db', GLib.VariantType.new("s"), GLib.Variant('s', config.uuid))
+        #action_open_db.connect('activate', self.open_db)
+        #self.add_action(action_open_db)
     
-    def open_db(self, action, value: GLib.Variant):
-        print(value.unpack())
-        config.use_db(value.unpack())
-        action.change_state(value)
+    #def open_db(self, action, value: GLib.Variant):
+    #    config.use_db(value.unpack())
+    #    action.change_state(value)
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -1036,23 +1035,20 @@ class MyApplication(Gtk.Application):
             builder = Gtk.Builder.new_from_string(menu_main_file.read(), -1)
 
         self.set_menubar(builder.get_object('menubar'))
+        '''
         list_db = builder.get_object('list_db')
         for name, uuid in config.list_dbs():
             item = Gio.MenuItem.new(name, None)
             # Description for the first arg of GLib.Variant: https://docs.gtk.org/glib/struct.VariantType.html
             item.set_action_and_target_value('app.open_db', GLib.Variant.new_string(uuid))
             list_db.append_item(item)
+        '''
 
     def do_activate(self):
         window = AppWindow(application=self, title='Human Environment')
         window.present()
 
 
-config.use_db()
-engine = get_engine_and_create_all(config.path)
-with Session(engine) as session:
-    create_first_rows(session)
-    app = MyApplication()
-    exit_status = app.run(sys.argv)
-
+app = MyApplication()
+exit_status = app.run(sys.argv)
 sys.exit(exit_status)

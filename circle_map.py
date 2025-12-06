@@ -3,16 +3,15 @@ import math
 from gi.repository import Gtk
 from sqlalchemy import select, func
 
-import db
+from db import models
 
 
 class CircleWidget(Gtk.DrawingArea):
-    def __init__(self, session):
+    def __init__(self):
         Gtk.DrawingArea.__init__(self)
         self.set_draw_func(self.draw)
         self.props.content_height = 800
         self.props.content_width = 800
-        self.session = session
 
     # cario.Context: https://pycairo.readthedocs.io/en/latest/reference/context.html
     def draw(self, widget, context, window_w, window_h):
@@ -27,17 +26,17 @@ class CircleWidget(Gtk.DrawingArea):
 
         # draw circles
 
-        radius_partial = radius / len(db.CIRCLES)
-        for circle_index, (circle_id, circle_name) in enumerate(db.CIRCLES.items(), 1):
+        radius_partial = radius / len(models.CIRCLES)
+        for circle_index, (circle_id, circle_name) in enumerate(models.CIRCLES.items(), 1):
             context.new_sub_path()
             context.arc(circle_center_x, circle_center_y, radius_partial * circle_index, 0, 360 * deg)
             context.stroke()
 
         # draw sectors (rotate a point around other one: https://foxford.ru/wiki/informatika/povorot-tochki)
         
-        degree_partial = 360 / self.session.scalar(select(func.count('*')).select_from(db.Sector))
+        degree_partial = 360 / models.Sector.objects.count()
         diff_y = padding - circle_center_y
-        for index_sector, sector in enumerate(self.session.scalars(select(db.Sector))):
+        for index_sector, sector in enumerate(models.Sector.objects.all()):
             rotate_degree = degree_partial * index_sector * deg
             x = circle_center_x - diff_y * math.sin(rotate_degree)
             y = circle_center_y + diff_y * math.cos(rotate_degree)
@@ -49,8 +48,8 @@ class CircleWidget(Gtk.DrawingArea):
 
 
 class CircleMapWindow(Gtk.ApplicationWindow):
-    def __init__(self, session, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        circle_widget = CircleWidget(session)
+        circle_widget = CircleWidget()
         self.set_child(circle_widget)

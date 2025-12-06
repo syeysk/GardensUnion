@@ -31,7 +31,8 @@ if not CONFIG_PATH.exists():
 
 with CONFIG_PATH.open(encoding='utf-8') as fjson:
     data = json.load(fjson)
-    STORAGE_NOTES = Path(data['storage_notes']).resolve()
+    #STORAGE_NOTES = Path(data['storage_notes']).resolve()
+    TG_TOKEN = data['tg_token']
 
 del data, fjson
 

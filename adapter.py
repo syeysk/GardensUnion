@@ -1,16 +1,16 @@
 import requests
 from gi.repository import Gtk
-from sqlalchemy import update
 
-from db import Contact
+from django.conf import settings
+
+from db.models import Contact
 
 
 class TGAdapter:
-    token = ''#os.getenv('TG_TOKEN')
+    token = settings.TG_TOKEN
 
-    def __init__(self, adapter_area, get_contact, session):
+    def __init__(self, adapter_area, get_contact):
         self.get_contact = get_contact
-        self.session = session
         self.url = f'https://api.telegram.org/bot{self.token}'
 
         # init GUI
@@ -65,15 +65,14 @@ class TGAdapter:
                 userid = self.load_numeric_id(username)
                 if userid:
                     data['userid'] = userid
-                    self.session.execute(update(Contact).where(Contact.id == contact.id).values(data=data))
-                    self.session.commit()
+                    contact.save()
 
     def action_fix(self, _):
         contact = self.get_contact()
         if contact:
             username = self.link2username(contact.value)
             contact.value = username[1:]
-            self.session.commit()
+            contact.save()
 
     def action_update_username(self, _):
         contact = self.get_contact()
@@ -86,7 +85,7 @@ class TGAdapter:
                     previous_usernames = data.setdefault('previous_usernames', [])
                     if contact.value not in previous_usernames:
                         previous_usernames.append(contact.value)
-                        self.session.execute(update(Contact).where(Contact.id == contact.id).values(data=data))
+                        contact.save()
 
                     contact.value = username[1:]
-                    self.session.commit()
+                    contact.save()
