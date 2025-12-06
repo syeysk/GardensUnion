@@ -926,8 +926,6 @@ class AppWindow(Gtk.ApplicationWindow):
         builder.button_show_contact.connect('clicked', self.on_show_entities, Contact, models.Contact)
         builder.button_show_meeting.connect('clicked', self.on_show_entities, Meeting, models.Meeting)
 
-        builder.button_export.connect('clicked', self.on_export)
-
         self.main_box = builder.main_box
         self.entities_column_view = None
         self.on_show_entities(None, Human, models.Human)
@@ -962,87 +960,18 @@ class AppWindow(Gtk.ApplicationWindow):
         for entity in entity_db_class.objects.all():
             self.entities_column_view.append(entity)
 
-    def on_export(self, action):
-        print('import')
-        import json
-        with open('dump.json', 'r', encoding='utf-8') as file_to_read:
-            data = json.load(file_to_read)
-
-        print(data[0])
-        from django.db import transaction
-        with transaction.atomic():
-            for row in data:
-                table = getattr(models, row['table'])
-                entity = table(**row['values'])
-                entity.save()
-
-        print('import was finished')
-        return
-    
-        print('export')
-        tables = {
-            'Sector': 'name',
-            'Human': 'family_name first_name father_name birth_year birth_month birth_day circle sex closing book_contact_type book_did sector_id',
-            'ContactType': 'name',
-            'Contact': 'value type_id status data',
-            'Community': 'name',
-            'Task': 'title aim_id has_done',
-            'Meeting': 'title description date',
-            'TaskAim': 'name',
-            'LinkContactHuman': 'contact_id human_id',
-            'LinkContactCommunity': 'contact_id community_id',
-            'LinkTaskHuman': 'task_id human_id',
-            'LinkTaskCommunity': 'task_id community_id',
-            'LinkTaskMeeting': 'task_id meeting_id',
-            'LinkHumanCommunity': 'human_id community_id',
-            'LinkHumanMeeting': 'human_id meeting_id',
-            'HumanRelationType': 'name',
-            'LinkHumanHuman': 'human_id human_linked_id relation_id',
-        }
-        data = []
-        for table, fields in tables.items():
-            fields = ['id', *fields.split()]
-            query = select(getattr(db, table))
-            for item in session.scalars(query):
-                data.append({'table': table, 'values': {field: getattr(item, field) for field in fields}})
-                if table == 'Meeting':
-                    data[-1]['values']['date'] = data[-1]['values']['date'].strftime('%Y-%m-%d %H:%M:%S')
-
-        import json
-        with open('dump.json', 'w', encoding='utf-8') as file_to_write:
-            json.dump(data, file_to_write)
-
-        print('export was finished')
-
 
 class MyApplication(Gtk.Application):
     def __init__(self):
         super().__init__(application_id='org.syeysk.HumEnv')
         GLib.set_application_name('Human Environment Builder')
-        
-        #action_open_db = Gio.SimpleAction.new_stateful('open_db', GLib.VariantType.new("s"), GLib.Variant('s', config.uuid))
-        #action_open_db.connect('activate', self.open_db)
-        #self.add_action(action_open_db)
-    
-    #def open_db(self, action, value: GLib.Variant):
-    #    config.use_db(value.unpack())
-    #    action.change_state(value)
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
-        
         with open(MENU_MAIN_PATH, encoding='utf-8') as menu_main_file:
             builder = Gtk.Builder.new_from_string(menu_main_file.read(), -1)
 
         self.set_menubar(builder.get_object('menubar'))
-        '''
-        list_db = builder.get_object('list_db')
-        for name, uuid in config.list_dbs():
-            item = Gio.MenuItem.new(name, None)
-            # Description for the first arg of GLib.Variant: https://docs.gtk.org/glib/struct.VariantType.html
-            item.set_action_and_target_value('app.open_db', GLib.Variant.new_string(uuid))
-            list_db.append_item(item)
-        '''
 
     def do_activate(self):
         window = AppWindow(application=self, title='Human Environment')
