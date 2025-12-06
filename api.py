@@ -3,13 +3,19 @@ from uuid import uuid4
 
 from sqlalchemy import select, delete, create_engine, or_
 
-from db import (
+from db_alch import (
     Base,
     ContactType,
     HumanRelationType,
     Sector,
     TaskAim,
 )
+
+import os
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings') 
+django.setup()
 
 class Config:
     def __init__(self, base_dir):

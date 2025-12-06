@@ -3,8 +3,8 @@ from datetime import date
 from pathlib import Path
 
 import gi
-import db
-from db import (
+import db_alch as db
+from db_alch import (
     BOOK_CONTACT_TYPES,
     BOOK_DID,
     CIRCLES,
@@ -19,9 +19,11 @@ from sqlalchemy.orm import Session
 gi.require_version('Gtk', '4.0')
 from gi.repository import GLib, Gio, Gtk, GObject, Gdk
 from circle_map import CircleMapWindow
+from django.conf import settings
+from db import models
 
 BASE_DIR = Path(__file__).resolve().parent
-XML_DIR = BASE_DIR / 'xml'
+XML_DIR = settings.BASE_REPO_DIR / 'xml'
 MENU_MAIN_PATH = XML_DIR / 'menu_main.xml'
 config = Config(BASE_DIR)
 
@@ -918,17 +920,17 @@ class AppWindow(Gtk.ApplicationWindow):
         action_show_map.connect('activate', self.on_show_map)
         self.add_action(action_show_map)
 
-        builder.button_show_human.connect('clicked', self.on_show_entities, Human, db.Human)
-        builder.button_show_community.connect('clicked', self.on_show_entities, Community, db.Community)
-        builder.button_show_task.connect('clicked', self.on_show_entities, Task, db.Task)
-        builder.button_show_contact.connect('clicked', self.on_show_entities, Contact, db.Contact)
-        builder.button_show_meeting.connect('clicked', self.on_show_entities, Meeting, db.Meeting)
+        builder.button_show_human.connect('clicked', self.on_show_entities, Human, models.Human)
+        builder.button_show_community.connect('clicked', self.on_show_entities, Community, models.Community)
+        builder.button_show_task.connect('clicked', self.on_show_entities, Task, models.Task)
+        builder.button_show_contact.connect('clicked', self.on_show_entities, Contact, models.Contact)
+        builder.button_show_meeting.connect('clicked', self.on_show_entities, Meeting, models.Meeting)
 
         builder.button_export.connect('clicked', self.on_export)
 
         self.main_box = builder.main_box
         self.entities_column_view = None
-        self.on_show_entities(None, Human, db.Human)
+        self.on_show_entities(None, Human, models.Human)
 
     def on_show_entities(self, action, entity_class, entity_db_class):
         if self.entities_column_view:
@@ -957,10 +959,26 @@ class AppWindow(Gtk.ApplicationWindow):
         self.update_entity_list(entity_db_class)
 
     def update_entity_list(self, entity_db_class):
-        for entity in session.scalars(select(entity_db_class)):
+        for entity in entity_db_class.objects.all(): #for entity in session.scalars(select(entity_db_class)):
             self.entities_column_view.append(entity)
 
     def on_export(self, action):
+        print('import')
+        import json
+        with open('dump.json', 'r', encoding='utf-8') as file_to_read:
+            data = json.load(file_to_read)
+
+        print(data[0])
+        from django.db import transaction
+        with transaction.atomic():
+            for row in data:
+                table = getattr(models, row['table'])
+                entity = table(**row['values'])
+                entity.save()
+
+        print('import was finished')
+        return
+    
         print('export')
         tables = {
             'Sector': 'name',

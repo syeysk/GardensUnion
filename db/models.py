@@ -116,8 +116,8 @@ class TaskAim(models.Model):
 
 class Task(models.Model):
     title = models.CharField('Название', max_length=100)
-    aim: models.ForeignKey(TaskAim, on_delete=models.CASCADE)
-    has_done: models.BooleanField('Выполнена?', default=False)
+    aim = models.ForeignKey(TaskAim, on_delete=models.CASCADE)
+    has_done = models.BooleanField('Выполнена?', default=False)
     
     class Model:
         verbose_name = 'Задача'
@@ -126,8 +126,8 @@ class Task(models.Model):
 
 class Meeting(models.Model):
     title = models.CharField('Заголовок', max_length=100)
-    description: models.CharField('Описание', max_length=10000, blank=True, default='')
-    date: models.DateTimeField(auto_now_add=True)
+    description = models.CharField('Описание', max_length=10000, blank=True, default='')
+    date = models.DateTimeField(auto_now_add=True)
 
     class Model:
         verbose_name = 'Встреча'
