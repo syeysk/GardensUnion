@@ -424,6 +424,17 @@ class WindowBuilder:
             for attr_name, attr_value in node.attrib.items():
                 if attr_name == 'id':
                     setattr(self, attr_value, gtkelem)
+                elif attr_name == 'policies':  # for ScrolledWindow
+                    policies = attr_value.split()
+                    gtkelem.set_policy(getattr(Gtk.PolicyType, policies[0]), getattr(Gtk.PolicyType, policies[1]))
+                elif attr_name == 'propagate_natural_height':  # for ScrolledWindow
+                    gtkelem.set_propagate_natural_height(True)
+                elif attr_name == 'propagate_natural_width':  # for ScrolledWindow
+                    gtkelem.set_propagate_natural_width(True)
+                elif attr_name == 'vexpand':
+                    gtkelem.set_vexpand(True)
+                elif attr_name == 'hexpand':
+                    gtkelem.set_hexpand(True)
                 else:
                     if attr_name in {'selected', 'xalign', 'spacing', 'margin_top', 'margin_start', 'margin_bottom', 'margin_end', 'column_spacing', 'row_spacing'}:
                         attr_value = int(attr_value) if attr_value else 0
@@ -913,8 +924,6 @@ class AppWindow(Gtk.ApplicationWindow):
         
         builder = WindowBuilder(XML_DIR / 'app.xml', {})
         self.set_child(builder.root_widget)
-
-        builder.scrolled_widget.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
 
         action_show_map = Gio.SimpleAction.new('show_map', None)
         action_show_map.connect('activate', self.on_show_map)
