@@ -31,6 +31,13 @@ MENU_MAIN_PATH = XML_DIR / 'menu_main.xml'
 
 FIELD_ID_SIZE = 30
 
+STYLE_CSS = '''
+label#title {
+    font-size: 14pt;
+    font-weight: 600;
+}
+'''
+
 
 class EntityEditWindow(Gtk.ApplicationWindow):
     entity_name = None
@@ -43,7 +50,15 @@ class EntityEditWindow(Gtk.ApplicationWindow):
             self.entity = self.entity_class.objects.filter(pk=entity_id).first()
 
         self.builder = WindowBuilder(XML_DIR / f'{self.entity_name}.xml', {'entity': self.entity}, parent_window=self)
-        self.set_child(self.builder.root_widget)
+        
+        main_box = Gtk.Box()
+        main_box.props.orientation = Gtk.Orientation.VERTICAL
+        sign_label = Gtk.Label(label=self.entity_name.title(), margin_bottom=10)
+        sign_label.set_name('title')
+        main_box.append(sign_label)
+        main_box.append(self.builder.root_widget)
+        
+        self.set_child(main_box)
 
     @GObject.Signal(arg_types=(int,))
     def entity_added(self, entity_id: int):
@@ -103,6 +118,13 @@ class EntityColumnView:
         cell._binding = None
 
     def __init__(self, parent_window, item_type, on_entity_added=None, on_entity_deleted=None, on_entity_selected=None):
+        title_box = Gtk.Box(spacing=6)
+        title_box.props.orientation = Gtk.Orientation.HORIZONTAL
+        
+        sign_label = Gtk.Label(label=f'{item_type.__gtype_name__} list', margin_bottom=10)
+        sign_label.set_name('title')
+        title_box.append(sign_label)
+    
         # Buttons
 
         self.parent_window = parent_window
@@ -128,9 +150,6 @@ class EntityColumnView:
             select_button.connect('clicked', self.on_select_item_clicked)            
             buttons_box.append(select_button)
 
-        sign_label = Gtk.Label(label=f'{item_type.__gtype_name__} list')
-        buttons_box.append(sign_label)
-
         # Item's list
     
         self.item_type_class = item_type
@@ -154,8 +173,9 @@ class EntityColumnView:
 
         self.box = Gtk.Box(spacing=2)
         self.box.props.orientation = Gtk.Orientation.VERTICAL
-        self.box.append(buttons_box)
+        self.box.append(title_box)
         self.box.append(view)
+        self.box.append(buttons_box)
         self.selection = selection
 
     def append(self, db_object):
@@ -203,6 +223,7 @@ class LinkedEntityColumnView(EntityColumnView):
         self.item_slave = item_slave
         self.same = same
         super().__init__(parent_window, item_type, self.on_entity_added, self.on_entity_deleted, self.on_entity_added)
+        self.box.props.margin_top = 20
         if self.parent_window.entity:
             self.update_list()
 
@@ -401,9 +422,9 @@ class WindowBuilder:
             kwargs = {}
 
             if tag in ('Label', 'Button', 'CheckButton'):
-                kwargs['label'] = node.text
+                kwargs['label'] = node.text or ''
             elif tag == 'Entry':
-                kwargs['text'] = node.text
+                kwargs['text'] = node.text or ''
             elif tag == 'EntityColumnView':
                 kwargs['parent_window'] = self.parent_window
                 kwargs['item_type'] = globals()[node.attrib.pop('item_type')]
@@ -974,6 +995,15 @@ class MyApplication(Gtk.Application):
     def __init__(self):
         super().__init__(application_id='org.syeysk.HumEnv')
         GLib.set_application_name('Human Environment Builder')
+        
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_string(STYLE_CSS)
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
