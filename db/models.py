@@ -54,7 +54,7 @@ BOOK_DID = {
 class Sector(models.Model):
     name = models.CharField('Наименование', max_length=64, unique=True)
     
-    class Model:
+    class Meta:
         verbose_name = 'Сектор'
         verbose_name_plural = 'Секторы'
 
@@ -74,7 +74,7 @@ class Human(models.Model):
 
     sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans')
 
-    class Model:
+    class Meta:
         verbose_name = 'Человек'
         verbose_name_plural = 'Люди'
 
@@ -82,7 +82,7 @@ class Human(models.Model):
 class ContactType(models.Model):
     name = models.CharField('Наименование', max_length=100, unique=True)
     
-    class Model:
+    class Meta:
         verbose_name = 'Тип контакта'
         verbose_name_plural = 'Типы контактов'
 
@@ -93,7 +93,7 @@ class Contact(models.Model):
     status = models.IntegerField('Статус', choices=CONTACT_STATUSES, default=CONTACT_STATUS_ACTIVE)
     data = models.JSONField(default=dict)
 
-    class Model:
+    class Meta:
         verbose_name = 'Контакт'
         verbose_name_plural = 'Контакты'
 
@@ -101,7 +101,7 @@ class Contact(models.Model):
 class Community(models.Model):
     name = models.CharField('Наименование', max_length=100)
     
-    class Model:
+    class Meta:
         verbose_name = 'Сообщество'
         verbose_name_plural = 'Сообщества'
 
@@ -109,7 +109,7 @@ class Community(models.Model):
 class TaskAim(models.Model):
     name = models.CharField('Наименование', max_length=100)
 
-    class Model:
+    class Meta:
         verbose_name = 'Цель задачи'
         verbose_name_plural = 'Цели задачи'
 
@@ -119,7 +119,7 @@ class Task(models.Model):
     aim = models.ForeignKey(TaskAim, on_delete=models.CASCADE)
     has_done = models.BooleanField('Выполнена?', default=False)
     
-    class Model:
+    class Meta:
         verbose_name = 'Задача'
         verbose_name_plural = 'Задачи'
 
@@ -129,7 +129,7 @@ class Meeting(models.Model):
     description = models.CharField('Описание', max_length=10000, blank=True, default='')
     date = models.DateTimeField(auto_now_add=True)
 
-    class Model:
+    class Meta:
         verbose_name = 'Встреча'
         verbose_name_plural = 'Встречи'
 
@@ -172,7 +172,7 @@ class LinkHumanMeeting(models.Model):
 class HumanRelationType(models.Model):
     name = models.CharField('Наименование', max_length=100)
 
-    class Model:
+    class Meta:
         verbose_name = 'Тип отношений'
         verbose_name_plural = 'Типы отношений'
 
