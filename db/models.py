@@ -70,9 +70,9 @@ class Human(models.Model):
     sex = models.IntegerField('Пол', choices=SEXES, default=SEX_UNKNOWN)
     closing = models.IntegerField('Близость', default=0)
     book_contact_type = models.IntegerField('Тип контакта', choices=BOOK_CONTACT_TYPES, default=BOOK_CONTACT_TYPE_UNKNOWN)
-    book_did = models.IntegerField('', choices=BOOK_DID, default=BOOK_DID_UNKNOWN)
+    book_did = models.IntegerField('Анализ ОИС', choices=BOOK_DID, default=BOOK_DID_UNKNOWN)
 
-    sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans')
+    sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans', verbose_name='Сектор')
 
     class Meta:
         verbose_name = 'Человек'
