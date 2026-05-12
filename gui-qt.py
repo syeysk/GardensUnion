@@ -4,7 +4,7 @@ import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
-    QLineEdit, QFormLayout, QDialogButtonBox, QAbstractItemView
+    QLineEdit, QFormLayout, QDialogButtonBox, QAbstractItemView, QComboBox
 )
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 
@@ -29,14 +29,26 @@ class GUI:
         self.inputs = {}
 
     def build_field_by_model(self, field_name, model, entity):
-        verbose = model._meta.get_field(field_name).verbose_name.capitalize()
-        line_edit = QLineEdit()
-        if entity:
-            value = getattr(entity, field_name)
-            line_edit.setText(str(value))
+        dj_field = model._meta.get_field(field_name)
+        verbose = dj_field.verbose_name.capitalize()
 
-        self.inputs[field_name] = line_edit
-        return QLabel(verbose), line_edit
+        choices = dj_field.choices
+        if choices:
+            field = QComboBox()
+            for choice_value, choice_name in choices:
+                field.addItem(choice_name, choice_value)
+            
+            if entity:
+                value = getattr(entity, field_name)
+                field.setCurrentText(dict(choices)[value])
+        else:
+            field = QLineEdit()
+            if entity:
+                value = getattr(entity, field_name)
+                field.setText(str(value))
+
+        self.inputs[field_name] = field
+        return QLabel(verbose), field
 
     def build_row(self, field_name, model_class, entity):
         label, edit = self.build_field_by_model(field_name, model_class, entity)
@@ -167,7 +179,14 @@ class RecordDialog(QDialog):
         layout.addWidget(buttons)
 
     def get_data(self):
-        return {field: widget.text() for field, widget in self.gui_model.inputs.items()}
+        values = {}
+        for field, widget in self.gui_model.inputs.items():
+            if isinstance(widget, QLineEdit):
+                values[field] = widget.text()
+            elif isinstance(widget, QComboBox):
+                values[field] = widget.currentData()
+
+        return values
 
 
 class MainWindow(QMainWindow):
@@ -241,15 +260,13 @@ class MainWindow(QMainWindow):
         # Получаем ID из первой колонки выбранной строки
         row = index.row()
         record_id = self.table_view.model()._data[row][0]
-        
-        # Загружаем объект из БД
+
         entity = self.current_model_class.model.objects.get(id=record_id)
 
         # Открываем диалог с данными
         dialog = RecordDialog(self, self.current_model_class, entity)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             new_data = dialog.get_data()
-            # Обновляем поля объекта
             for field, value in new_data.items():
                 setattr(entity, field, value)
 
