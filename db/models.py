@@ -74,6 +74,9 @@ class Human(models.Model):
 
     sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans', verbose_name='Сектор')
 
+    def __str__(self):
+        return f'{self.family_name} {self.first_name} {self.father_name}'
+
     class Meta:
         verbose_name = 'Человек'
         verbose_name_plural = 'Люди'
@@ -82,6 +85,9 @@ class Human(models.Model):
 class ContactType(models.Model):
     name = models.CharField('Наименование', max_length=100, unique=True)
     
+    def __str__(self):
+        return self.name
+
     class Meta:
         verbose_name = 'Тип контакта'
         verbose_name_plural = 'Типы контактов'
@@ -93,6 +99,9 @@ class Contact(models.Model):
     status = models.IntegerField('Статус', choices=CONTACT_STATUSES, default=CONTACT_STATUS_ACTIVE)
     data = models.JSONField(default=dict)
 
+    def __str__(self):
+        return f'{self.type}: {self.value}'
+
     class Meta:
         verbose_name = 'Контакт'
         verbose_name_plural = 'Контакты'
@@ -100,7 +109,10 @@ class Contact(models.Model):
 
 class Community(models.Model):
     name = models.CharField('Наименование', max_length=100)
-    
+
+    def __str__(self):
+        return self.name
+
     class Meta:
         verbose_name = 'Сообщество'
         verbose_name_plural = 'Сообщества'
@@ -118,7 +130,10 @@ class Task(models.Model):
     title = models.CharField('Название', max_length=100)
     aim = models.ForeignKey(TaskAim, on_delete=models.CASCADE)
     has_done = models.BooleanField('Выполнена?', default=False)
-    
+
+    def __str__(self):
+        return f'{"[x]" if self.has_done else "[ ]"} {self.title}'
+
     class Meta:
         verbose_name = 'Задача'
         verbose_name_plural = 'Задачи'
@@ -128,6 +143,9 @@ class Meeting(models.Model):
     title = models.CharField('Заголовок', max_length=100)
     description = models.CharField('Описание', max_length=10000, blank=True, default='')
     date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.date.strftime("%Y-%m-%d")} {self.title}'
 
     class Meta:
         verbose_name = 'Встреча'

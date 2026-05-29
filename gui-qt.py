@@ -13,7 +13,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 django.setup()
 
 # from django.conf import settings
-# from django.db.models import Q
+from django.db.models import Q
 # from db.models import (
 #     BOOK_CONTACT_TYPES,
 #     BOOK_DID,
@@ -21,10 +21,24 @@ django.setup()
 #     SEXES,
 #     CONTACT_STATUSES,
 # )
-from db.models import Community, Contact, Human, Task, Meeting
+from db.models import (
+    Community,
+    Contact,
+    Human,
+    Task,
+    Meeting,
+    LinkContactHuman,
+    LinkContactCommunity,
+    LinkTaskHuman,
+    LinkTaskCommunity,
+    LinkTaskMeeting,
+    LinkHumanMeeting,
+    LinkHumanCommunity,
+    LinkHumanHuman,
+)
 
 
-class GUI:
+class GUIEntity:
     def __init__(self):
         self.inputs = {}
 
@@ -58,11 +72,11 @@ class GUI:
         return layout_line
 
 
-class GUIHuman(GUI):
+class GUIHuman(GUIEntity):
     model = Human
     table_fields = ['id', 'family_name', 'first_name']
 
-    def build_form(self, entity=dict()):
+    def build_form(self, entity):
         layout_left = QVBoxLayout()
         field_names = ['sex', 'birth_year', 'birth_month', 'birth_day']
         for field_name in field_names:
@@ -78,10 +92,23 @@ class GUIHuman(GUI):
         layout = QHBoxLayout()
         layout.addLayout(layout_left)
         layout.addLayout(layout_right)
+
+        if entity:
+            table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact', ['contact'])
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community', ['community'])
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting', ['meeting'])
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task', ['task'])
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', ['human_linked'], same=True)
+            layout.addWidget(table)
+
         return layout
 
 
-class GUICommunity(GUI):
+class GUICommunity(GUIEntity):
     model = Community
     table_fields = ['id', 'name']
 
@@ -92,10 +119,14 @@ class GUICommunity(GUI):
             layout_line = self.build_row(field_name, self.model, entity)
             layout.addLayout(layout_line)
         
+        if entity:
+            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'human', ['human'])
+            layout.addWidget(table)
+
         return layout
 
 
-class GUITask(GUI):
+class GUITask(GUIEntity):
     model = Task
     table_fields = ['id', 'has_done', 'title']
 
@@ -104,7 +135,7 @@ class GUITask(GUI):
         return layout
 
 
-class GUIContact(GUI):
+class GUIContact(GUIEntity):
     model = Contact
     table_fields = ['id', 'type', 'value', 'status']
 
@@ -113,7 +144,7 @@ class GUIContact(GUI):
         return layout
 
 
-class GUIMeeting(GUI):
+class GUIMeeting(GUIEntity):
     model = Meeting
     table_fields = ['id', 'title']
 
@@ -123,11 +154,11 @@ class GUIMeeting(GUI):
 
 
 class DjangoTableModel(QAbstractTableModel):
-    def __init__(self, django_model, field_names):
+    def __init__(self, django_model, field_names, queryset=None):
         super().__init__()
-        self.django_model = django_model
         self.field_names = field_names
         self._headers = []
+        self.queryset = django_model.objects if queryset is None else queryset 
         for name in field_names:
             if name == 'id':
                 self._headers.append('ID')
@@ -138,7 +169,11 @@ class DjangoTableModel(QAbstractTableModel):
 
     def refresh(self):
         self.beginResetModel()
-        self._data = list(self.django_model.objects.values_list(*self.field_names))
+        _data = self.queryset.only(*self.field_names)
+        self._data = []
+        for entity in _data:
+            self._data.append(list(getattr(entity, name) for name in self.field_names))
+
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):  # TODO: узнать, что это за аргумент parent
@@ -187,6 +222,26 @@ class RecordDialog(QDialog):
                 values[field] = widget.currentData()
 
         return values
+
+
+class LinkedEntitiesTable(QTableView):
+    def __init__(self, entity, linking_table, item_slave, fields, *args, same=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+
+        item_main = entity.__class__.__name__.lower()
+        # item_slave_type = linking_table.meta.fields
+
+        queryset = linking_table.objects
+        if same:
+            queryset = queryset.filter(Q(**{item_main: entity}) | Q(**{item_slave: entity}))
+        else:
+            queryset = queryset.filter(**{item_main: entity})
+        
+        model = DjangoTableModel(linking_table, fields, queryset)
+        self.setModel(model)
+
 
 
 class MainWindow(QMainWindow):
@@ -272,6 +327,7 @@ class MainWindow(QMainWindow):
 
             entity.save()
             self.table_view.model().refresh()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
