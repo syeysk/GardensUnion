@@ -190,6 +190,9 @@ class LinkHumanMeeting(models.Model):
 class HumanRelationType(models.Model):
     name = models.CharField('Наименование', max_length=100)
 
+    def __str__(self):
+        return self.name
+
     class Meta:
         verbose_name = 'Тип отношений'
         verbose_name_plural = 'Типы отношений'

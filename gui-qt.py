@@ -94,15 +94,15 @@ class GUIHuman(GUIEntity):
         layout.addLayout(layout_right)
 
         if entity:
-            table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact', ['contact'])
+            table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact')
             layout.addWidget(table)
-            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community', ['community'])
+            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community')
             layout.addWidget(table)
-            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting', ['meeting'])
+            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting')
             layout.addWidget(table)
-            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task', ['task'])
+            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task')
             layout.addWidget(table)
-            table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', ['human_linked'], same=True)
+            table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', fields=['relation'], same=True)
             layout.addWidget(table)
 
         return layout
@@ -120,7 +120,11 @@ class GUICommunity(GUIEntity):
             layout.addLayout(layout_line)
         
         if entity:
-            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'human', ['human'])
+            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'human')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkContactCommunity, 'contact')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'task')
             layout.addWidget(table)
 
         return layout
@@ -132,6 +136,15 @@ class GUITask(GUIEntity):
 
     def build_form(self, entity=dict()):
         layout = QVBoxLayout()
+
+        if entity:
+            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'human')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'community')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'meeting')
+            layout.addWidget(table)
+
         return layout
 
 
@@ -141,6 +154,13 @@ class GUIContact(GUIEntity):
 
     def build_form(self, entity=dict()):
         layout = QVBoxLayout()
+
+        if entity:
+            table = LinkedEntitiesTable(entity, LinkContactHuman, 'human')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkContactCommunity, 'community')
+            layout.addWidget(table)
+
         return layout
 
 
@@ -150,15 +170,23 @@ class GUIMeeting(GUIEntity):
 
     def build_form(self, entity=dict()):
         layout = QVBoxLayout()
+
+        if entity:
+            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'human')
+            layout.addWidget(table)
+            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'task')
+            layout.addWidget(table)
+
         return layout
 
 
 class DjangoTableModel(QAbstractTableModel):
-    def __init__(self, django_model, field_names, queryset=None):
+    def __init__(self, django_model, field_names, queryset=None, func_get_value=None):
         super().__init__()
         self.field_names = field_names
         self._headers = []
         self.queryset = django_model.objects if queryset is None else queryset 
+        self.func_get_value = func_get_value
         for name in field_names:
             if name == 'id':
                 self._headers.append('ID')
@@ -172,7 +200,12 @@ class DjangoTableModel(QAbstractTableModel):
         _data = self.queryset.only(*self.field_names)
         self._data = []
         for entity in _data:
-            self._data.append(list(getattr(entity, name) for name in self.field_names))
+            row = []
+            for name in self.field_names:
+                value = getattr(entity, name)
+                row.append(self.func_get_value(entity, name, value) if self.func_get_value else value)
+
+            self._data.append(row)
 
         self.endResetModel()
 
@@ -225,23 +258,28 @@ class RecordDialog(QDialog):
 
 
 class LinkedEntitiesTable(QTableView):
-    def __init__(self, entity, linking_table, item_slave, fields, *args, same=False, **kwargs):
+    def __init__(self, entity, linking_table, item_slave, *args, fields=list(), same=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         item_main = entity.__class__.__name__.lower()
-        # item_slave_type = linking_table.meta.fields
+        # item_slave_type = linking_table.meta.fields 
 
         queryset = linking_table.objects
         if same:
-            queryset = queryset.filter(Q(**{item_main: entity}) | Q(**{item_slave: entity}))
+            queryset = queryset.filter(Q(**{item_main: entity}) | Q(**{item_slave: entity}))#.annotate(linked_id=case)
         else:
             queryset = queryset.filter(**{item_main: entity})
-        
-        model = DjangoTableModel(linking_table, fields, queryset)
-        self.setModel(model)
 
+        def func_get_value(hyper_entity, field_name, field_value):
+            if same and field_name == item_slave and field_value.pk == entity.pk:
+                return getattr(hyper_entity, item_main)
+                
+            return field_value
+
+        model = DjangoTableModel(linking_table, [item_slave, *fields], queryset, func_get_value)
+        self.setModel(model)
 
 
 class MainWindow(QMainWindow):
