@@ -4,7 +4,7 @@ import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
-    QLineEdit, QFormLayout, QDialogButtonBox, QAbstractItemView, QComboBox
+    QLineEdit, QFormLayout, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea
 )
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 
@@ -38,11 +38,30 @@ from db.models import (
 )
 
 
+class ForeignField(QWidget):
+    entity = None
+
+    def __init__(self, entity=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        layout = QHBoxLayout()
+
+        self.btn_select = QPushButton()
+        layout.addWidget(self.btn_select)
+
+        self.setLayout(layout)
+        self.set_entity(entity)
+    
+    def set_entity(self, entity):
+        self.entity = entity
+        self.btn_select.setText(str(entity))
+    
+
 class GUIEntity:
     def __init__(self):
         self.inputs = {}
 
     def build_field_by_model(self, field_name, model, entity):
+        from django.db.models import ForeignKey
         dj_field = model._meta.get_field(field_name)
         verbose = dj_field.verbose_name.capitalize()
 
@@ -55,6 +74,11 @@ class GUIEntity:
             if entity:
                 value = getattr(entity, field_name)
                 field.setCurrentText(dict(choices)[value])
+        elif isinstance(dj_field, ForeignKey):
+            field = ForeignField()
+            if entity:
+                value = getattr(entity, field_name)
+                field.set_entity(value)
         else:
             field = QLineEdit()
             if entity:
@@ -62,7 +86,7 @@ class GUIEntity:
                 field.setText(str(value))
 
         self.inputs[field_name] = field
-        return QLabel(verbose), field
+        return QLabel(f'{verbose}:'), field
 
     def build_row(self, field_name, model_class, entity):
         label, edit = self.build_field_by_model(field_name, model_class, entity)
@@ -70,6 +94,18 @@ class GUIEntity:
         layout_line.addWidget(label)
         layout_line.addWidget(edit)
         return layout_line
+
+    def get_data(self):
+        values = {}
+        for field, widget in self.gui_model.inputs.items():
+            if isinstance(widget, QLineEdit):
+                values[field] = widget.text()
+            elif isinstance(widget, ForeignField):
+                values[field] = widget.entity
+            elif isinstance(widget, QComboBox):
+                values[field] = widget.currentData()
+
+        return values
 
 
 class GUIHuman(GUIEntity):
@@ -89,22 +125,26 @@ class GUIHuman(GUIEntity):
             layout_line = self.build_row(field_name, self.model, entity)
             layout_right.addLayout(layout_line)
 
-        layout = QHBoxLayout()
-        layout.addLayout(layout_left)
-        layout.addLayout(layout_right)
+        layout_fields = QHBoxLayout()
+        layout_fields.addLayout(layout_left)
+        layout_fields.addLayout(layout_right)
 
+        layout_links = QVBoxLayout()
         if entity:
             table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact')
-            layout.addWidget(table)
+            layout_links.addWidget(table)
             table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community')
-            layout.addWidget(table)
+            layout_links.addWidget(table)
             table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting')
-            layout.addWidget(table)
+            layout_links.addWidget(table)
             table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task')
-            layout.addWidget(table)
+            layout_links.addWidget(table)
             table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', fields=['relation'], same=True)
-            layout.addWidget(table)
+            layout_links.addWidget(table)
 
+        layout = QVBoxLayout()
+        layout.addLayout(layout_fields)
+        layout.addLayout(layout_links)
         return layout
 
 
@@ -180,10 +220,27 @@ class GUIMeeting(GUIEntity):
         return layout
 
 
+class GUILinkedObject(GUIEntity):
+    model = None
+    table_fields = None
+
+    def build_form(self, entity=dict()):
+        layout = QVBoxLayout()
+        # TODO: автоматически собирать поля с django-модели
+        for field in self.model._meta.fields:
+            field_name = field.name
+            layout_line = self.build_row(field_name, self.model, entity)
+            layout.addLayout(layout_line)
+
+        return layout
+
+
 class DjangoTableModel(QAbstractTableModel):
-    def __init__(self, django_model, field_names, queryset=None, func_get_value=None):
+    def __init__(self, django_model, field_names, gui_model, queryset=None, func_get_value=None):
         super().__init__()
-        self.field_names = field_names
+        self.django_model = django_model
+        self.gui_model = gui_model
+        self.field_names = gui_model.table_fields
         self._headers = []
         self.queryset = django_model.objects if queryset is None else queryset 
         self.func_get_value = func_get_value
@@ -229,13 +286,24 @@ class DjangoTableModel(QAbstractTableModel):
 
 
 class RecordDialog(QDialog):
-    def __init__(self, parent, gui_model, entity=None):
-        super().__init__(parent)
+    def __init__(self, gui_model, entity=None):
+        super().__init__(None)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
+
         self.gui_model = gui_model
 
         title_prefix = 'Редактировать' if entity else 'Добавить'
         self.setWindowTitle(f'{title_prefix}: {gui_model.model._meta.verbose_name}')
-        layout = QVBoxLayout(self)
+
+        main_layout = QVBoxLayout(self)
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setLayout(layout)
+        main_layout.addWidget(scroll_area)
+
         self.form_layout = QFormLayout()
 
         layout_form = gui_model.build_form(entity)
@@ -246,22 +314,45 @@ class RecordDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_data(self):
-        values = {}
-        for field, widget in self.gui_model.inputs.items():
-            if isinstance(widget, QLineEdit):
-                values[field] = widget.text()
-            elif isinstance(widget, QComboBox):
-                values[field] = widget.currentData()
 
-        return values
-
-
-class LinkedEntitiesTable(QTableView):
-    def __init__(self, entity, linking_table, item_slave, *args, fields=list(), same=False, **kwargs):
-        super().__init__(*args, **kwargs)
+class EntitiesTable(QTableView):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.doubleClicked.connect(self.open_edit_dialog)
+
+    def open_add_dialog(self):
+        table_model = self.model()
+        dialog = RecordDialog(table_model.gui_model)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = table_model.gui_model.get_data()
+            table_model.django_model.objects.create(**data)
+            self.model().refresh()
+
+    def open_edit_dialog(self, index):
+        # Получаем ID из первой колонки выбранной строки
+        row = index.row()
+        table_model = self.model()
+        record_id = table_model._data[row][0]
+
+        entity = table_model.django_model.objects.get(id=record_id)
+
+        # Открываем диалог с данными
+        dialog = RecordDialog(table_model.gui_model, entity)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_data = dialog.get_data()
+            for field, value in new_data.items():
+                setattr(entity, field, value)
+
+            #entity.save()
+            self.model().refresh()
+
+
+class LinkedEntitiesTable(EntitiesTable):
+    def __init__(self, entity, linking_table, item_slave, *args, fields=list(), same=False, **kwargs):
+        super().__init__(None, *args, **kwargs)
+        self.setFixedHeight(200)
 
         item_main = entity.__class__.__name__.lower()
         # item_slave_type = linking_table.meta.fields 
@@ -278,7 +369,10 @@ class LinkedEntitiesTable(QTableView):
                 
             return field_value
 
-        model = DjangoTableModel(linking_table, [item_slave, *fields], queryset, func_get_value)
+        gui_model = GUILinkedObject()
+        gui_model.model = linking_table
+        gui_model.table_fields = ['id', item_slave, *fields]
+        model = DjangoTableModel(linking_table, gui_model.table_fields, gui_model, queryset, func_get_value)
         self.setModel(model)
 
 
@@ -287,8 +381,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         screen = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(0, 0, screen.width() // 2, screen.height() - 30)
-        
-        self.current_model_class = Human
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -319,15 +411,12 @@ class MainWindow(QMainWindow):
         self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
         content_layout.addWidget(self.title_label)
 
-        self.table_view = QTableView()
-        self.table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table_view.doubleClicked.connect(self.open_edit_dialog)
+        self.table_view = EntitiesTable(self)
         content_layout.addWidget(self.table_view)
 
         self.add_button = QPushButton('Добавить')
         self.add_button.setFixedWidth(200)
-        self.add_button.clicked.connect(self.open_add_dialog)
+        self.add_button.clicked.connect(self.table_view.open_add_dialog)
         content_layout.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         main_layout.addLayout(content_layout)
@@ -335,36 +424,12 @@ class MainWindow(QMainWindow):
         self.update_table(GUIHuman)
 
     def update_table(self, gui_model):
-        self.current_model_class = gui_model()
         django_model = gui_model.model
-        model = DjangoTableModel(django_model, gui_model.table_fields)
+        model = DjangoTableModel(django_model, gui_model.table_fields, gui_model())
+        title = str(django_model._meta.verbose_name_plural)
         self.table_view.setModel(model)
-        self.title_label.setText(str(django_model._meta.verbose_name_plural))
-        self.setWindowTitle(str(django_model._meta.verbose_name_plural))
-
-    def open_add_dialog(self):
-        dialog = RecordDialog(self, self.current_model_class)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            data = dialog.get_data()
-            self.current_model_class.model.objects.create(**data)
-            self.table_view.model().refresh() # Обновляем таблицу
-
-    def open_edit_dialog(self, index):
-        # Получаем ID из первой колонки выбранной строки
-        row = index.row()
-        record_id = self.table_view.model()._data[row][0]
-
-        entity = self.current_model_class.model.objects.get(id=record_id)
-
-        # Открываем диалог с данными
-        dialog = RecordDialog(self, self.current_model_class, entity)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            new_data = dialog.get_data()
-            for field, value in new_data.items():
-                setattr(entity, field, value)
-
-            entity.save()
-            self.table_view.model().refresh()
+        self.title_label.setText(title)
+        self.setWindowTitle(title)
 
 
 if __name__ == "__main__":
