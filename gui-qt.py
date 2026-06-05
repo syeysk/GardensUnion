@@ -14,13 +14,6 @@ django.setup()
 
 # from django.conf import settings
 from django.db.models import Q
-# from db.models import (
-#     BOOK_CONTACT_TYPES,
-#     BOOK_DID,
-#     CIRCLES,
-#     SEXES,
-#     CONTACT_STATUSES,
-# )
 from db.models import (
     Community,
     Contact,
@@ -35,18 +28,25 @@ from db.models import (
     LinkHumanMeeting,
     LinkHumanCommunity,
     LinkHumanHuman,
+
+    Sector,
 )
 
 
 class ForeignField(QWidget):
     entity = None
 
-    def __init__(self, entity=None, *args, **kwargs):
+    def __init__(self, gui_model, entity=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         layout = QHBoxLayout()
+        self.gui_model = gui_model
 
         self.btn_select = QPushButton()
         layout.addWidget(self.btn_select)
+
+        self.btn_edit = QPushButton('o')
+        self.btn_edit.clicked.connect(self.open_entity_window)
+        layout.addWidget(self.btn_edit)
 
         self.setLayout(layout)
         self.set_entity(entity)
@@ -54,7 +54,12 @@ class ForeignField(QWidget):
     def set_entity(self, entity):
         self.entity = entity
         self.btn_select.setText(str(entity))
-    
+
+    def open_entity_window(self):
+        if self.entity:
+            if RecordDialog(self.gui_model, self.entity).exec() == QDialog.DialogCode.Accepted:
+                self.btn_select.setText(str(self.entity))
+
 
 class GUIEntity:
     def __init__(self):
@@ -75,7 +80,7 @@ class GUIEntity:
                 value = getattr(entity, field_name)
                 field.setCurrentText(dict(choices)[value])
         elif isinstance(dj_field, ForeignKey):
-            field = ForeignField()
+            field = ForeignField(DJ2GUI[dj_field.remote_field.model]())
             if entity:
                 value = getattr(entity, field_name)
                 field.set_entity(value)
@@ -97,7 +102,7 @@ class GUIEntity:
 
     def get_data(self):
         values = {}
-        for field, widget in self.gui_model.inputs.items():
+        for field, widget in self.inputs.items():
             if isinstance(widget, QLineEdit):
                 values[field] = widget.text()
             elif isinstance(widget, ForeignField):
@@ -235,6 +240,19 @@ class GUILinkedObject(GUIEntity):
         return layout
 
 
+class GUISector(GUIEntity):
+    model = Sector
+    table_fields = ['id', 'name']
+
+    def build_form(self, entity=dict()):
+        layout = QVBoxLayout()
+        layout_line = self.build_row('name', self.model, entity)
+        layout.addLayout(layout_line)
+        return layout
+
+
+DJ2GUI = {gui.model: gui for gui in GUIEntity.__subclasses__()}
+
 class DjangoTableModel(QAbstractTableModel):
     def __init__(self, django_model, field_names, gui_model, queryset=None, func_get_value=None):
         super().__init__()
@@ -292,6 +310,7 @@ class RecordDialog(QDialog):
         self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
 
         self.gui_model = gui_model
+        self.entity = entity
 
         title_prefix = 'Редактировать' if entity else 'Добавить'
         self.setWindowTitle(f'{title_prefix}: {gui_model.model._meta.verbose_name}')
@@ -310,9 +329,22 @@ class RecordDialog(QDialog):
         layout.addLayout(layout_form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+    
+    def save(self):
+        data = self.gui_model.get_data()
+        if self.entity:
+            print('update', data)
+            for field, value in data.items():
+                setattr(self.entity, field, value)
+
+            #self.entity.save()
+        else:
+            self.entity = self.gui_model.model.objects.create(**data)
+
+        self.accept()
 
 
 class EntitiesTable(QTableView):
@@ -324,10 +356,7 @@ class EntitiesTable(QTableView):
 
     def open_add_dialog(self):
         table_model = self.model()
-        dialog = RecordDialog(table_model.gui_model)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            data = table_model.gui_model.get_data()
-            table_model.django_model.objects.create(**data)
+        if RecordDialog(table_model.gui_model).exec() == QDialog.DialogCode.Accepted:
             self.model().refresh()
 
     def open_edit_dialog(self, index):
@@ -337,15 +366,7 @@ class EntitiesTable(QTableView):
         record_id = table_model._data[row][0]
 
         entity = table_model.django_model.objects.get(id=record_id)
-
-        # Открываем диалог с данными
-        dialog = RecordDialog(table_model.gui_model, entity)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            new_data = dialog.get_data()
-            for field, value in new_data.items():
-                setattr(entity, field, value)
-
-            #entity.save()
+        if RecordDialog(table_model.gui_model, entity).exec() == QDialog.DialogCode.Accepted:
             self.model().refresh()
 
 

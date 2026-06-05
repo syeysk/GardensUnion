@@ -53,7 +53,10 @@ BOOK_DID = {
 
 class Sector(models.Model):
     name = models.CharField('Наименование', max_length=64, unique=True)
-    
+
+    def __str__(self):
+        return self.name
+
     class Meta:
         verbose_name = 'Сектор'
         verbose_name_plural = 'Секторы'
