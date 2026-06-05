@@ -29,6 +29,7 @@ from db.models import (
     LinkHumanCommunity,
     LinkHumanHuman,
 
+    HumanRelationType,
     Sector,
 )
 
@@ -57,17 +58,80 @@ class ForeignField(QWidget):
 
     def open_entity_window(self):
         if self.entity:
-            if RecordDialog(self.gui_model, self.entity).exec() == QDialog.DialogCode.Accepted:
+            if self.gui_model(self.entity).exec() == QDialog.DialogCode.Accepted:
                 self.btn_select.setText(str(self.entity))
 
 
-class GUIEntity:
-    def __init__(self):
+class GUIEntity(QDialog):
+    model = None
+
+    def __init__(self, entity=None):
+        super().__init__(None)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
+
         self.inputs = {}
 
-    def build_field_by_model(self, field_name, model, entity):
+        main_layout = QVBoxLayout(self)
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setLayout(layout)
+        main_layout.addWidget(scroll_area)
+
+        self.form_layout = QFormLayout()
+
+        self.entity = entity
+        layout_form = self.build_form()
+        self.set_entity(entity)
+        layout.addLayout(layout_form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.save)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def set_entity(self, entity):
+        self.entity = entity
+        title_prefix = 'Редактировать' if entity else 'Добавить'
+        self.setWindowTitle(f'{title_prefix}: {self.model._meta.verbose_name}')
+        self.populate_form()
+
+    def save(self):
+        data = self.get_data()
+        if self.entity:
+            print('update', data)
+            for field, value in data.items():
+                setattr(self.entity, field, value)
+
+            #self.entity.save()
+        else:
+            print('create', data)
+            entity = self.model.objects.create(**data)
+            self.set_entity(entity)
+
+        self.accept()
+    
+    def populate_form(self):
+        if not self.entity:
+            return
+
+        for field_name, field in self.inputs.items():
+            dj_field = self.model._meta.get_field(field_name)
+            if isinstance(field, QComboBox):
+                value = getattr(self.entity, field_name)
+                field.setCurrentText(dict(dj_field.choices)[value])
+            elif isinstance(field, ForeignField):
+                value = getattr(self.entity, field_name)
+                field.set_entity(value)
+            elif isinstance(field, QLineEdit):
+                value = getattr(self.entity, field_name)
+                field.setText(str(value))
+
+    def build_field_by_model(self, field_name):
         from django.db.models import ForeignKey
-        dj_field = model._meta.get_field(field_name)
+        dj_field = self.model._meta.get_field(field_name)
         verbose = dj_field.verbose_name.capitalize()
 
         choices = dj_field.choices
@@ -75,26 +139,16 @@ class GUIEntity:
             field = QComboBox()
             for choice_value, choice_name in choices:
                 field.addItem(choice_name, choice_value)
-            
-            if entity:
-                value = getattr(entity, field_name)
-                field.setCurrentText(dict(choices)[value])
         elif isinstance(dj_field, ForeignKey):
-            field = ForeignField(DJ2GUI[dj_field.remote_field.model]())
-            if entity:
-                value = getattr(entity, field_name)
-                field.set_entity(value)
+            field = ForeignField(DJ2GUI[dj_field.remote_field.model])
         else:
             field = QLineEdit()
-            if entity:
-                value = getattr(entity, field_name)
-                field.setText(str(value))
 
         self.inputs[field_name] = field
         return QLabel(f'{verbose}:'), field
 
-    def build_row(self, field_name, model_class, entity):
-        label, edit = self.build_field_by_model(field_name, model_class, entity)
+    def build_row(self, field_name):
+        label, edit = self.build_field_by_model(field_name)
         layout_line = QHBoxLayout()
         layout_line.addWidget(label)
         layout_line.addWidget(edit)
@@ -111,23 +165,27 @@ class GUIEntity:
                 values[field] = widget.currentData()
 
         return values
+    
+    def build_form(self):
+        raise NotImplemented()
 
 
 class GUIHuman(GUIEntity):
     model = Human
     table_fields = ['id', 'family_name', 'first_name']
 
-    def build_form(self, entity):
+    def build_form(self):
+        entity = self.entity
         layout_left = QVBoxLayout()
         field_names = ['sex', 'birth_year', 'birth_month', 'birth_day']
         for field_name in field_names:
-            layout_line = self.build_row(field_name, self.model, entity)
+            layout_line = self.build_row(field_name)
             layout_left.addLayout(layout_line)
 
         layout_right = QVBoxLayout()
         field_names = ['family_name', 'first_name', 'father_name', 'closing', 'circle', 'sector', 'book_contact_type', 'book_did']
         for field_name in field_names:
-            layout_line = self.build_row(field_name, self.model, entity)
+            layout_line = self.build_row(field_name)
             layout_right.addLayout(layout_line)
 
         layout_fields = QHBoxLayout()
@@ -157,11 +215,12 @@ class GUICommunity(GUIEntity):
     model = Community
     table_fields = ['id', 'name']
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
+        entity = self.entity
         layout = QVBoxLayout()
         field_names = ['name']
         for field_name in field_names:
-            layout_line = self.build_row(field_name, self.model, entity)
+            layout_line = self.build_row(field_name)
             layout.addLayout(layout_line)
         
         if entity:
@@ -179,7 +238,8 @@ class GUITask(GUIEntity):
     model = Task
     table_fields = ['id', 'has_done', 'title']
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
+        entity = self.entity
         layout = QVBoxLayout()
 
         if entity:
@@ -197,7 +257,8 @@ class GUIContact(GUIEntity):
     model = Contact
     table_fields = ['id', 'type', 'value', 'status']
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
+        entity = self.entity
         layout = QVBoxLayout()
 
         if entity:
@@ -213,7 +274,8 @@ class GUIMeeting(GUIEntity):
     model = Meeting
     table_fields = ['id', 'title']
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
+        entity = self.entity
         layout = QVBoxLayout()
 
         if entity:
@@ -226,32 +288,50 @@ class GUIMeeting(GUIEntity):
 
 
 class GUILinkedObject(GUIEntity):
-    model = None
-    table_fields = None
+    def __init__(self, model, table_fields, *args, **kwargs):
+        self.model = model
+        self.table_fields = table_fields
+        super().__init__(*args, **kwargs)
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
         layout = QVBoxLayout()
         # TODO: автоматически собирать поля с django-модели
         for field in self.model._meta.fields:
             field_name = field.name
-            layout_line = self.build_row(field_name, self.model, entity)
+            layout_line = self.build_row(field_name)
             layout.addLayout(layout_line)
 
         return layout
+    
+    def __call__(self, entity=None):
+        self.set_entity(entity)
+        return self
 
 
 class GUISector(GUIEntity):
     model = Sector
     table_fields = ['id', 'name']
 
-    def build_form(self, entity=dict()):
+    def build_form(self):
         layout = QVBoxLayout()
-        layout_line = self.build_row('name', self.model, entity)
+        layout_line = self.build_row('name', self.model)
+        layout.addLayout(layout_line)
+        return layout
+
+
+class GUIHumanRelationType(GUIEntity):
+    model = HumanRelationType
+    table_fields = ['id', 'name']
+
+    def build_form(self):
+        layout = QVBoxLayout()
+        layout_line = self.build_row('name', self.model)
         layout.addLayout(layout_line)
         return layout
 
 
 DJ2GUI = {gui.model: gui for gui in GUIEntity.__subclasses__()}
+
 
 class DjangoTableModel(QAbstractTableModel):
     def __init__(self, django_model, field_names, gui_model, queryset=None, func_get_value=None):
@@ -303,50 +383,6 @@ class DjangoTableModel(QAbstractTableModel):
         return None
 
 
-class RecordDialog(QDialog):
-    def __init__(self, gui_model, entity=None):
-        super().__init__(None)
-        screen = QApplication.primaryScreen().availableGeometry()
-        self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
-
-        self.gui_model = gui_model
-        self.entity = entity
-
-        title_prefix = 'Редактировать' if entity else 'Добавить'
-        self.setWindowTitle(f'{title_prefix}: {gui_model.model._meta.verbose_name}')
-
-        main_layout = QVBoxLayout(self)
-        content_widget = QWidget()
-        layout = QVBoxLayout(content_widget)
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setLayout(layout)
-        main_layout.addWidget(scroll_area)
-
-        self.form_layout = QFormLayout()
-
-        layout_form = gui_model.build_form(entity)
-        layout.addLayout(layout_form)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.save)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-    
-    def save(self):
-        data = self.gui_model.get_data()
-        if self.entity:
-            print('update', data)
-            for field, value in data.items():
-                setattr(self.entity, field, value)
-
-            #self.entity.save()
-        else:
-            self.entity = self.gui_model.model.objects.create(**data)
-
-        self.accept()
-
-
 class EntitiesTable(QTableView):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
@@ -356,7 +392,7 @@ class EntitiesTable(QTableView):
 
     def open_add_dialog(self):
         table_model = self.model()
-        if RecordDialog(table_model.gui_model).exec() == QDialog.DialogCode.Accepted:
+        if table_model.gui_model().exec() == QDialog.DialogCode.Accepted:
             self.model().refresh()
 
     def open_edit_dialog(self, index):
@@ -366,7 +402,7 @@ class EntitiesTable(QTableView):
         record_id = table_model._data[row][0]
 
         entity = table_model.django_model.objects.get(id=record_id)
-        if RecordDialog(table_model.gui_model, entity).exec() == QDialog.DialogCode.Accepted:
+        if table_model.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
             self.model().refresh()
 
 
@@ -390,9 +426,7 @@ class LinkedEntitiesTable(EntitiesTable):
                 
             return field_value
 
-        gui_model = GUILinkedObject()
-        gui_model.model = linking_table
-        gui_model.table_fields = ['id', item_slave, *fields]
+        gui_model = GUILinkedObject(linking_table, ['id', item_slave, *fields])
         model = DjangoTableModel(linking_table, gui_model.table_fields, gui_model, queryset, func_get_value)
         self.setModel(model)
 
@@ -446,7 +480,7 @@ class MainWindow(QMainWindow):
 
     def update_table(self, gui_model):
         django_model = gui_model.model
-        model = DjangoTableModel(django_model, gui_model.table_fields, gui_model())
+        model = DjangoTableModel(django_model, gui_model.table_fields, gui_model)
         title = str(django_model._meta.verbose_name_plural)
         self.table_view.setModel(model)
         self.title_label.setText(title)
