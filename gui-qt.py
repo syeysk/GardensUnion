@@ -69,20 +69,12 @@ class GUIEntity(QDialog):
         super().__init__(None)
         screen = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
-
         self.inputs = {}
-
-        main_layout = QVBoxLayout(self)
-        content_widget = QWidget()
-        layout = QVBoxLayout(content_widget)
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setLayout(layout)
-        main_layout.addWidget(scroll_area)
-
-        self.form_layout = QFormLayout()
-
         self.entity = entity
+
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
         layout_form = self.build_form()
         self.set_entity(entity)
         layout.addLayout(layout_form)
@@ -91,7 +83,14 @@ class GUIEntity(QDialog):
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-    
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(False)
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(scroll_area)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_area.setWidget(central_widget)
+
     def set_entity(self, entity):
         self.entity = entity
         title_prefix = 'Редактировать' if entity else 'Добавить'
@@ -194,15 +193,15 @@ class GUIHuman(GUIEntity):
         layout_links = QVBoxLayout()
         if entity:
             table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact')
-            layout_links.addWidget(table)
+            layout_links.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community')
-            layout_links.addWidget(table)
+            layout_links.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting')
-            layout_links.addWidget(table)
+            layout_links.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task')
-            layout_links.addWidget(table)
+            layout_links.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', fields=['relation'], same=True)
-            layout_links.addWidget(table)
+            layout_links.addLayout(table)
 
         layout = QVBoxLayout()
         layout.addLayout(layout_fields)
@@ -224,11 +223,11 @@ class GUICommunity(GUIEntity):
         
         if entity:
             table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'human')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkContactCommunity, 'contact')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'task')
-            layout.addWidget(table)
+            layout.addLayout(table)
 
         return layout
 
@@ -243,11 +242,11 @@ class GUITask(GUIEntity):
 
         if entity:
             table = LinkedEntitiesTable(entity, LinkTaskHuman, 'human')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'community')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'meeting')
-            layout.addWidget(table)
+            layout.addLayout(table)
 
         return layout
 
@@ -262,9 +261,9 @@ class GUIContact(GUIEntity):
 
         if entity:
             table = LinkedEntitiesTable(entity, LinkContactHuman, 'human')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkContactCommunity, 'community')
-            layout.addWidget(table)
+            layout.addLayout(table)
 
         return layout
 
@@ -279,9 +278,9 @@ class GUIMeeting(GUIEntity):
 
         if entity:
             table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'human')
-            layout.addWidget(table)
+            layout.addLayout(table)
             table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'task')
-            layout.addWidget(table)
+            layout.addLayout(table)
 
         return layout
 
@@ -333,11 +332,10 @@ DJ2GUI = {gui.model: gui for gui in GUIEntity.__subclasses__()}
 
 
 class DjangoTableModel(QAbstractTableModel):
-    def __init__(self, django_model, field_names, gui_model, queryset=None, func_get_value=None):
+    def __init__(self, django_model, field_names, queryset=None, func_get_value=None):
         super().__init__()
         self.django_model = django_model
-        self.gui_model = gui_model
-        self.field_names = gui_model.table_fields
+        self.field_names = field_names
         self._headers = []
         self._data = []
         self.entities = []
@@ -386,37 +384,63 @@ class DjangoTableModel(QAbstractTableModel):
         return None
 
 
-class EntitiesTable(QTableView):
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.doubleClicked.connect(self.open_edit_dialog)
+class EntitiesTable(QVBoxLayout):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.table = QTableView()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.doubleClicked.connect(self.open_edit_dialog)
+
+        self.title_label = QLabel()
+        self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
+
+        btn_add = QPushButton('Добавить')
+        btn_add.clicked.connect(self.open_add_dialog)
+        btn_delete = QPushButton('Удалить')
+        # btn_delete.clicked.connect(self.open_delete_dialog)
+
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(self.title_label)
+        header_layout.addWidget(btn_add)
+        header_layout.addWidget(btn_delete)
+        self.addLayout(header_layout)
+        self.addWidget(self.table)
+        # self.addWidget(btn_add, alignment=Qt.AlignmentFlag.AlignHCenter)
 
     def open_add_dialog(self):
-        table_model = self.model()
-        if table_model.gui_model().exec() == QDialog.DialogCode.Accepted:
-            self.model().refresh()
+        if self.gui_model().exec() == QDialog.DialogCode.Accepted:
+            self.table.model().refresh()
 
     def open_edit_dialog(self, index):
-        table_model = self.model()
+        table_model = self.table.model()
         entity = table_model.entities[index.row()]
-        # entity = table_model.django_model.objects.get(id=record_id)
-        if table_model.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
-            self.model().refresh()
+        if self.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
+            table_model.refresh()
+    
+    def set_model(self, gui_model, *args):
+        self.gui_model = gui_model
+        model = DjangoTableModel(gui_model.model, gui_model.table_fields, *args)
+        title = str(gui_model.model._meta.verbose_name_plural)
+        self.title_label.setText(title)
+        self.table.setModel(model)
+        return title
 
 
 class LinkedEntitiesTable(EntitiesTable):
     def __init__(self, entity, linking_table, item_slave, *args, fields=list(), same=False, **kwargs):
-        super().__init__(None, *args, **kwargs)
-        self.setFixedHeight(200)
+        super().__init__(*args, **kwargs)
+        self.table.setFixedHeight(200)
+        self.table.setMaximumHeight(200)
+        self.table.setMinimumHeight(200)
+        self.setContentsMargins(0, 50, 0, 0)
 
         item_main = entity.__class__.__name__.lower()
         # item_slave_type = linking_table.meta.fields 
 
         queryset = linking_table.objects
         if same:
-            queryset = queryset.filter(Q(**{item_main: entity}) | Q(**{item_slave: entity}))#.annotate(linked_id=case)
+            queryset = queryset.filter(Q(**{item_main: entity}) | Q(**{item_slave: entity}))
         else:
             queryset = queryset.filter(**{item_main: entity})
 
@@ -427,8 +451,7 @@ class LinkedEntitiesTable(EntitiesTable):
             return field_value
 
         gui_model = GUILinkedObject(linking_table, ['id', item_slave, *fields])
-        model = DjangoTableModel(linking_table, gui_model.table_fields, gui_model, queryset, func_get_value)
-        self.setModel(model)
+        self.set_model(gui_model, queryset, func_get_value)
 
 
 class MainWindow(QMainWindow):
@@ -461,29 +484,13 @@ class MainWindow(QMainWindow):
 
         # 2. ПРАВАЯ ЧАСТЬ (ТАБЛИЦА)
         content_layout = QVBoxLayout()
-        
-        self.title_label = QLabel('Заголовок')
-        self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
-        content_layout.addWidget(self.title_label)
-
-        self.table_view = EntitiesTable(self)
-        content_layout.addWidget(self.table_view)
-
-        self.add_button = QPushButton('Добавить')
-        self.add_button.setFixedWidth(200)
-        self.add_button.clicked.connect(self.table_view.open_add_dialog)
-        content_layout.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignHCenter)
-
+        self.table_view = EntitiesTable()
+        content_layout.addLayout(self.table_view)
         main_layout.addLayout(content_layout)
-
         self.update_table(GUIHuman)
 
     def update_table(self, gui_model):
-        django_model = gui_model.model
-        model = DjangoTableModel(django_model, gui_model.table_fields, gui_model)
-        title = str(django_model._meta.verbose_name_plural)
-        self.table_view.setModel(model)
-        self.title_label.setText(title)
+        title = self.table_view.set_model(gui_model)
         self.setWindowTitle(title)
 
 
