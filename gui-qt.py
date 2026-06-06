@@ -191,7 +191,6 @@ class GUIHuman(GUIEntity):
         layout_fields = QHBoxLayout()
         layout_fields.addLayout(layout_left)
         layout_fields.addLayout(layout_right)
-
         layout_links = QVBoxLayout()
         if entity:
             table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact')
@@ -281,7 +280,7 @@ class GUIMeeting(GUIEntity):
         if entity:
             table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'human')
             layout.addWidget(table)
-            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'task')
+            table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'task')
             layout.addWidget(table)
 
         return layout
@@ -314,7 +313,7 @@ class GUISector(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
-        layout_line = self.build_row('name', self.model)
+        layout_line = self.build_row('name')
         layout.addLayout(layout_line)
         return layout
 
@@ -325,7 +324,7 @@ class GUIHumanRelationType(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
-        layout_line = self.build_row('name', self.model)
+        layout_line = self.build_row('name')
         layout.addLayout(layout_line)
         return layout
 
@@ -340,6 +339,8 @@ class DjangoTableModel(QAbstractTableModel):
         self.gui_model = gui_model
         self.field_names = gui_model.table_fields
         self._headers = []
+        self._data = []
+        self.entities = []
         self.queryset = django_model.objects if queryset is None else queryset 
         self.func_get_value = func_get_value
         for name in field_names:
@@ -354,7 +355,9 @@ class DjangoTableModel(QAbstractTableModel):
         self.beginResetModel()
         _data = self.queryset.only(*self.field_names)
         self._data = []
+        self.entities = []
         for entity in _data:
+            self.entities.append(entity)
             row = []
             for name in self.field_names:
                 value = getattr(entity, name)
@@ -396,12 +399,9 @@ class EntitiesTable(QTableView):
             self.model().refresh()
 
     def open_edit_dialog(self, index):
-        # Получаем ID из первой колонки выбранной строки
-        row = index.row()
         table_model = self.model()
-        record_id = table_model._data[row][0]
-
-        entity = table_model.django_model.objects.get(id=record_id)
+        entity = table_model.entities[index.row()]
+        # entity = table_model.django_model.objects.get(id=record_id)
         if table_model.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
             self.model().refresh()
 
