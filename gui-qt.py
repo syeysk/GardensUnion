@@ -4,7 +4,7 @@ import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
-    QLineEdit, QFormLayout, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea
+    QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea
 )
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 
@@ -43,6 +43,7 @@ class ForeignField(QWidget):
         self.gui_model = gui_model
 
         self.btn_select = QPushButton()
+        self.btn_select.clicked.connect(self.open_select_window)
         layout.addWidget(self.btn_select)
 
         self.btn_edit = QPushButton('o')
@@ -60,6 +61,33 @@ class ForeignField(QWidget):
         if self.entity:
             if self.gui_model(self.entity).exec() == QDialog.DialogCode.Accepted:
                 self.btn_select.setText(str(self.entity))
+
+    def open_select_window(self):
+        window = SelectEntitywindow(self.gui_model)
+        window.exec()
+        if window.entity:
+            self.set_entity(window.entity)
+
+
+class SelectEntitywindow(QDialog):
+    model = None
+
+    def __init__(self, gui_model):
+        super().__init__(None)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.setGeometry(0, 0, screen.width() // 3, 400)
+        self.gui_model = gui_model
+        table_view = EntitiesTable(func_click_on_entity=self.select_entity)
+        table_view.set_model(self.gui_model)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.addLayout(table_view)
+
+        self.entity = None
+    
+    def select_entity(self, entity):
+        self.entity = entity
+        self.close()
 
 
 class GUIEntity(QDialog):
@@ -84,6 +112,7 @@ class GUIEntity(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+        # TODO: вынести в отдельный класс ScrollArea
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(False)
         main_layout = QVBoxLayout(self)
@@ -385,12 +414,12 @@ class DjangoTableModel(QAbstractTableModel):
 
 
 class EntitiesTable(QVBoxLayout):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, func_click_on_entity=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.table = QTableView()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.doubleClicked.connect(self.open_edit_dialog)
+        self.table.doubleClicked.connect(lambda index: self.on_click_entity(index, func_click_on_entity or self.open_edit_dialog))
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
@@ -407,16 +436,18 @@ class EntitiesTable(QVBoxLayout):
         self.addLayout(header_layout)
         self.addWidget(self.table)
         # self.addWidget(btn_add, alignment=Qt.AlignmentFlag.AlignHCenter)
+    
+    def on_click_entity(self, index, func):
+        entity = self.table.model().entities[index.row()]
+        func(entity)
 
     def open_add_dialog(self):
         if self.gui_model().exec() == QDialog.DialogCode.Accepted:
             self.table.model().refresh()
 
-    def open_edit_dialog(self, index):
-        table_model = self.table.model()
-        entity = table_model.entities[index.row()]
+    def open_edit_dialog(self, entity):
         if self.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
-            table_model.refresh()
+            self.table.model().refresh()
     
     def set_model(self, gui_model, *args):
         self.gui_model = gui_model
