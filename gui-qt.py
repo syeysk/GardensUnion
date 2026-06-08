@@ -103,6 +103,7 @@ class SelectEntitywindow(QDialog):
 
 class GUIEntity(QDialog):
     model = None
+    links = tuple()
 
     def __init__(self, entity=None):
         super().__init__(None)
@@ -122,6 +123,9 @@ class GUIEntity(QDialog):
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        if entity:
+            layout.addLayout(self.build_links())            
 
         # TODO: вынести в отдельный класс ScrollArea
         scroll_area = QScrollArea()
@@ -210,10 +214,25 @@ class GUIEntity(QDialog):
     def build_form(self):
         raise NotImplemented()
 
+    def build_links(self):
+        layout = QVBoxLayout()
+        for link_args, link_kwargs in self.links:
+            table = LinkedEntitiesTable(self.entity, *link_args, **link_kwargs)
+            layout.addLayout(table)
+        
+        return layout
+
 
 class GUIHuman(GUIEntity):
     model = Human
     table_fields = ['id', 'family_name', 'first_name']
+    links = (
+        ((LinkContactHuman, 'contact'), {}),
+        ((LinkHumanCommunity, 'community'), {}),
+        ((LinkHumanMeeting, 'meeting'), {}),
+        ((LinkTaskHuman, 'task'), {}),
+        ((LinkHumanHuman, 'human_linked'), {'fields': ['relation']}),
+    )
 
     def build_form(self):
         entity = self.entity
@@ -232,44 +251,23 @@ class GUIHuman(GUIEntity):
         layout_fields = QHBoxLayout()
         layout_fields.addLayout(layout_left)
         layout_fields.addLayout(layout_right)
-        layout_links = QVBoxLayout()
-        if entity:
-            table = LinkedEntitiesTable(entity, LinkContactHuman, 'contact')
-            layout_links.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'community')
-            layout_links.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'meeting')
-            layout_links.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'task')
-            layout_links.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkHumanHuman, 'human_linked', fields=['relation'], same=True)
-            layout_links.addLayout(table)
-
-        layout = QVBoxLayout()
-        layout.addLayout(layout_fields)
-        layout.addLayout(layout_links)
-        return layout
+        return layout_fields
 
 
 class GUICommunity(GUIEntity):
     model = Community
     table_fields = ['id', 'name']
+    links = (
+        ((LinkHumanCommunity, 'human'), {}),
+        ((LinkTaskCommunity, 'task'), {}),
+    )
 
     def build_form(self):
-        entity = self.entity
         layout = QVBoxLayout()
         field_names = ['name']
         for field_name in field_names:
             layout_line = self.build_row(field_name)
             layout.addLayout(layout_line)
-        
-        if entity:
-            table = LinkedEntitiesTable(entity, LinkHumanCommunity, 'human')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkContactCommunity, 'contact')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'task')
-            layout.addLayout(table)
 
         return layout
 
@@ -277,53 +275,40 @@ class GUICommunity(GUIEntity):
 class GUITask(GUIEntity):
     model = Task
     table_fields = ['id', 'has_done', 'title']
+    links = (
+        ((LinkTaskHuman, 'human'), {}),
+        ((LinkTaskCommunity, 'community'), {}),
+        ((LinkTaskMeeting, 'meeting'), {}),
+    )
 
     def build_form(self):
-        entity = self.entity
         layout = QVBoxLayout()
-
-        if entity:
-            table = LinkedEntitiesTable(entity, LinkTaskHuman, 'human')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkTaskCommunity, 'community')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'meeting')
-            layout.addLayout(table)
-
         return layout
 
 
 class GUIContact(GUIEntity):
     model = Contact
     table_fields = ['id', 'type', 'value', 'status']
+    links = (
+        ((LinkContactHuman, 'human'), {}),
+        ((LinkContactCommunity, 'community'), {}),
+    )
 
     def build_form(self):
-        entity = self.entity
         layout = QVBoxLayout()
-
-        if entity:
-            table = LinkedEntitiesTable(entity, LinkContactHuman, 'human')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkContactCommunity, 'community')
-            layout.addLayout(table)
-
         return layout
 
 
 class GUIMeeting(GUIEntity):
     model = Meeting
     table_fields = ['id', 'title']
+    links = (
+        ((LinkHumanMeeting, 'human'), {}),
+        ((LinkTaskMeeting, 'task'), {}),
+    )
 
     def build_form(self):
-        entity = self.entity
         layout = QVBoxLayout()
-
-        if entity:
-            table = LinkedEntitiesTable(entity, LinkHumanMeeting, 'human')
-            layout.addLayout(table)
-            table = LinkedEntitiesTable(entity, LinkTaskMeeting, 'task')
-            layout.addLayout(table)
-
         return layout
 
 
@@ -472,15 +457,17 @@ class EntitiesTable(QVBoxLayout):
 
 
 class LinkedEntitiesTable(EntitiesTable):
-    def __init__(self, entity, linking_table, item_slave, *args, fields=list(), same=False, **kwargs):
+    def __init__(self, entity, linking_table, item_slave, *args, fields=list(), **kwargs):
         super().__init__(*args, **kwargs)
         self.table.setFixedHeight(200)
         self.table.setMaximumHeight(200)
         self.table.setMinimumHeight(200)
         self.setContentsMargins(0, 50, 0, 0)
 
-        item_main = entity.__class__.__name__.lower()
-        # item_slave_type = linking_table.meta.fields 
+        item_main_model = entity.__class__
+        item_main = item_main_model.__name__.lower()
+        item_slave_model = linking_table._meta.get_field(item_slave).remote_field.model
+        same = item_main_model is item_slave_model
 
         queryset = linking_table.objects
         if same:
