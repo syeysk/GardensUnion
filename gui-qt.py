@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
     QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea
 )
+from PyQt6.QtGui import QIntValidator
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 
 
@@ -13,7 +14,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 django.setup()
 
 # from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, ForeignKey, IntegerField, NOT_PROVIDED
 from db.models import (
     Community,
     Contact,
@@ -34,7 +35,17 @@ from db.models import (
 )
 
 
-class ForeignField(QWidget):
+class IntegerQField(QLineEdit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setValidator(QIntValidator())
+    
+    def value(self):
+        text = self.text().strip()
+        return int(text) if text else None
+
+
+class ForeignQField(QWidget):
     entity = None
 
     def __init__(self, gui_model, entity=None, *args, **kwargs):
@@ -133,7 +144,7 @@ class GUIEntity(QDialog):
             for field, value in data.items():
                 setattr(self.entity, field, value)
 
-            #self.entity.save()
+            self.entity.save()
         else:
             print('create', data)
             entity = self.model.objects.create(**data)
@@ -142,23 +153,21 @@ class GUIEntity(QDialog):
         self.accept()
     
     def populate_form(self):
-        if not self.entity:
-            return
-
         for field_name, field in self.inputs.items():
             dj_field = self.model._meta.get_field(field_name)
+            if self.entity:
+                value = getattr(self.entity, field_name)
+            else:
+                value = '' if dj_field.default is NOT_PROVIDED else dj_field.default
+ 
             if isinstance(field, QComboBox):
-                value = getattr(self.entity, field_name)
                 field.setCurrentText(dict(dj_field.choices)[value])
-            elif isinstance(field, ForeignField):
-                value = getattr(self.entity, field_name)
+            elif isinstance(field, ForeignQField):
                 field.set_entity(value)
             elif isinstance(field, QLineEdit):
-                value = getattr(self.entity, field_name)
                 field.setText(str(value))
 
     def build_field_by_model(self, field_name):
-        from django.db.models import ForeignKey
         dj_field = self.model._meta.get_field(field_name)
         verbose = dj_field.verbose_name.capitalize()
 
@@ -168,7 +177,9 @@ class GUIEntity(QDialog):
             for choice_value, choice_name in choices:
                 field.addItem(choice_name, choice_value)
         elif isinstance(dj_field, ForeignKey):
-            field = ForeignField(DJ2GUI[dj_field.remote_field.model])
+            field = ForeignQField(DJ2GUI[dj_field.remote_field.model])
+        elif isinstance(dj_field, IntegerField):
+            field = IntegerQField()
         else:
             field = QLineEdit()
 
@@ -185,9 +196,11 @@ class GUIEntity(QDialog):
     def get_data(self):
         values = {}
         for field, widget in self.inputs.items():
-            if isinstance(widget, QLineEdit):
+            if isinstance(widget, IntegerQField):
+                values[field] = widget.value()
+            elif isinstance(widget, QLineEdit):
                 values[field] = widget.text()
-            elif isinstance(widget, ForeignField):
+            elif isinstance(widget, ForeignQField):
                 values[field] = widget.entity
             elif isinstance(widget, QComboBox):
                 values[field] = widget.currentData()
