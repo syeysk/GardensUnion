@@ -151,7 +151,7 @@ class GUIEntity(QDialog):
             for field, value in data.items():
                 setattr(self.entity, field, value)
 
-            #self.entity.save()
+            self.entity.save()
         else:
             print('create', data)
             entity = self.model.objects.create(**data)
@@ -470,7 +470,8 @@ class EntitiesTable(QVBoxLayout):
         self.table = QTableView()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.doubleClicked.connect(lambda index: self.on_click_entity(index, func_click_on_entity or self.open_edit_dialog))
+        self.func_click_on_entity = func_click_on_entity
+        self.table.doubleClicked.connect(self.open_edit_dialog)
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
@@ -478,7 +479,7 @@ class EntitiesTable(QVBoxLayout):
         btn_add = QPushButton('Добавить')
         btn_add.clicked.connect(self.open_add_dialog)
         btn_delete = QPushButton('Удалить')
-        # btn_delete.clicked.connect(self.open_delete_dialog)
+        btn_delete.clicked.connect(self.open_delete_dialog)
 
         header_layout = QHBoxLayout()
         header_layout.addWidget(self.title_label)
@@ -488,16 +489,24 @@ class EntitiesTable(QVBoxLayout):
         self.addWidget(self.table)
         # self.addWidget(btn_add, alignment=Qt.AlignmentFlag.AlignHCenter)
     
-    def on_click_entity(self, index, func):
+    def open_edit_dialog(self, index):
+        def default_open_edit_dialog(entity):
+            if self.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
+                self.table.model().refresh()
+
         entity = self.table.model().entities[index.row()]
-        func(entity)
+        (self.func_click_on_entity or default_open_edit_dialog)(entity)
 
     def open_add_dialog(self):
         if self.gui_model().exec() == QDialog.DialogCode.Accepted:
             self.table.model().refresh()
 
-    def open_edit_dialog(self, entity):
-        if self.gui_model(entity).exec() == QDialog.DialogCode.Accepted:
+    def open_delete_dialog(self, _):
+        index = self.table.currentIndex()
+        index_row = index.row()
+        if index_row > -1:
+            entity = self.table.model().entities[index.row()]
+            entity.delete()
             self.table.model().refresh()
     
     def set_model(self, gui_model, *args):
