@@ -124,6 +124,9 @@ class Community(models.Model):
 class TaskAim(models.Model):
     name = models.CharField('Наименование', max_length=100)
 
+    def __str__(self):
+        return self.name
+
     class Meta:
         verbose_name = 'Цель задачи'
         verbose_name_plural = 'Цели задачи'

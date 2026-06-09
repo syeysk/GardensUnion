@@ -4,7 +4,7 @@ import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
-    QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea
+    QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea, QCheckBox
 )
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
@@ -14,7 +14,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 django.setup()
 
 # from django.conf import settings
-from django.db.models import Q, ForeignKey, IntegerField, NOT_PROVIDED
+from django.db.models import Q, ForeignKey, IntegerField, NOT_PROVIDED, BooleanField
 from db.models import (
     Community,
     Contact,
@@ -30,8 +30,10 @@ from db.models import (
     LinkHumanCommunity,
     LinkHumanHuman,
 
+    ContactType,
     HumanRelationType,
     Sector,
+    TaskAim,
 )
 
 
@@ -148,7 +150,7 @@ class GUIEntity(QDialog):
             for field, value in data.items():
                 setattr(self.entity, field, value)
 
-            self.entity.save()
+            #self.entity.save()
         else:
             print('create', data)
             entity = self.model.objects.create(**data)
@@ -166,6 +168,8 @@ class GUIEntity(QDialog):
  
             if isinstance(field, QComboBox):
                 field.setCurrentText(dict(dj_field.choices)[value])
+            elif isinstance(field, QCheckBox):
+                field.setChecked(value)
             elif isinstance(field, ForeignQField):
                 field.set_entity(value)
             elif isinstance(field, QLineEdit):
@@ -182,6 +186,8 @@ class GUIEntity(QDialog):
                 field.addItem(choice_name, choice_value)
         elif isinstance(dj_field, ForeignKey):
             field = ForeignQField(DJ2GUI[dj_field.remote_field.model])
+        elif isinstance(dj_field, BooleanField):
+            field = QCheckBox()
         elif isinstance(dj_field, IntegerField):
             field = IntegerQField()
         else:
@@ -206,8 +212,12 @@ class GUIEntity(QDialog):
                 values[field] = widget.text()
             elif isinstance(widget, ForeignQField):
                 values[field] = widget.entity
+            elif isinstance(widget, QCheckBox):
+                values[field] = widget.isChecked()
             elif isinstance(widget, QComboBox):
                 values[field] = widget.currentData()
+            else:
+                print('Unknown type of field:', widget, field)
 
         return values
     
@@ -225,7 +235,7 @@ class GUIEntity(QDialog):
 
 class GUIHuman(GUIEntity):
     model = Human
-    table_fields = ['id', 'family_name', 'first_name']
+    table_fields = ['family_name', 'first_name']
     links = (
         ((LinkContactHuman, 'contact'), {}),
         ((LinkHumanCommunity, 'community'), {}),
@@ -256,7 +266,7 @@ class GUIHuman(GUIEntity):
 
 class GUICommunity(GUIEntity):
     model = Community
-    table_fields = ['id', 'name']
+    table_fields = ['name']
     links = (
         ((LinkHumanCommunity, 'human'), {}),
         ((LinkTaskCommunity, 'task'), {}),
@@ -274,7 +284,7 @@ class GUICommunity(GUIEntity):
 
 class GUITask(GUIEntity):
     model = Task
-    table_fields = ['id', 'has_done', 'title']
+    table_fields = ['has_done', 'title']
     links = (
         ((LinkTaskHuman, 'human'), {}),
         ((LinkTaskCommunity, 'community'), {}),
@@ -283,12 +293,17 @@ class GUITask(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
+        field_names = ['title', 'aim', 'has_done']
+        for field_name in field_names:
+            layout_line = self.build_row(field_name)
+            layout.addLayout(layout_line)
+
         return layout
 
 
 class GUIContact(GUIEntity):
     model = Contact
-    table_fields = ['id', 'type', 'value', 'status']
+    table_fields = ['type', 'value', 'status']
     links = (
         ((LinkContactHuman, 'human'), {}),
         ((LinkContactCommunity, 'community'), {}),
@@ -296,12 +311,17 @@ class GUIContact(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
+        field_names = ['value', 'type', 'status']
+        for field_name in field_names:
+            layout_line = self.build_row(field_name)
+            layout.addLayout(layout_line)
+
         return layout
 
 
 class GUIMeeting(GUIEntity):
     model = Meeting
-    table_fields = ['id', 'title']
+    table_fields = ['title']
     links = (
         ((LinkHumanMeeting, 'human'), {}),
         ((LinkTaskMeeting, 'task'), {}),
@@ -309,6 +329,11 @@ class GUIMeeting(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
+        field_names = ['title', 'description', 'date']
+        for field_name in field_names:
+            layout_line = self.build_row(field_name)
+            layout.addLayout(layout_line)
+
         return layout
 
 
@@ -320,8 +345,10 @@ class GUILinkedObject(GUIEntity):
 
     def build_form(self):
         layout = QVBoxLayout()
-        # TODO: автоматически собирать поля с django-модели
         for field in self.model._meta.fields:
+            if field.name == 'id':
+                continue
+
             field_name = field.name
             layout_line = self.build_row(field_name)
             layout.addLayout(layout_line)
@@ -335,7 +362,7 @@ class GUILinkedObject(GUIEntity):
 
 class GUISector(GUIEntity):
     model = Sector
-    table_fields = ['id', 'name']
+    table_fields = ['name']
 
     def build_form(self):
         layout = QVBoxLayout()
@@ -346,7 +373,29 @@ class GUISector(GUIEntity):
 
 class GUIHumanRelationType(GUIEntity):
     model = HumanRelationType
-    table_fields = ['id', 'name']
+    table_fields = ['name']
+
+    def build_form(self):
+        layout = QVBoxLayout()
+        layout_line = self.build_row('name')
+        layout.addLayout(layout_line)
+        return layout
+
+
+class GUITaskAim(GUIEntity):
+    model = TaskAim
+    table_fields = ['name']
+
+    def build_form(self):
+        layout = QVBoxLayout()
+        layout_line = self.build_row('name')
+        layout.addLayout(layout_line)
+        return layout
+
+
+class GUIContactType(GUIEntity):
+    model = ContactType
+    table_fields = ['name']
 
     def build_form(self):
         layout = QVBoxLayout()
