@@ -107,10 +107,11 @@ class GUIEntity(QDialog):
     model = None
     links = tuple()
 
-    def __init__(self, entity=None):
+    def __init__(self, entity=None, preset_values=None):
         super().__init__(None)
         screen = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(0, 0, screen.width() // 3, screen.height() - 30)
+        self.preset_values = preset_values or {}
         self.inputs = {}
         self.entity = entity
 
@@ -127,7 +128,7 @@ class GUIEntity(QDialog):
         layout.addWidget(buttons)
 
         if entity:
-            layout.addLayout(self.build_links())            
+            layout.addLayout(self.build_links())
 
         # TODO: вынести в отдельный класс ScrollArea
         scroll_area = QScrollArea()
@@ -164,7 +165,10 @@ class GUIEntity(QDialog):
             if self.entity:
                 value = getattr(self.entity, field_name)
             else:
-                value = '' if dj_field.default is NOT_PROVIDED else dj_field.default
+                if field_name in self.preset_values:
+                    value = self.preset_values[field_name]
+                else:
+                    value = '' if dj_field.default is NOT_PROVIDED else dj_field.default
  
             if isinstance(field, QComboBox):
                 field.setCurrentText(dict(dj_field.choices)[value])
@@ -338,10 +342,10 @@ class GUIMeeting(GUIEntity):
 
 
 class GUILinkedObject(GUIEntity):
-    def __init__(self, model, table_fields, *args, **kwargs):
+    def __init__(self, model, table_fields, preset_values, *args, **kwargs):
         self.model = model
         self.table_fields = table_fields
-        super().__init__(*args, **kwargs)
+        super().__init__(preset_values=preset_values, *args, **kwargs)
 
     def build_form(self):
         layout = QVBoxLayout()
@@ -530,7 +534,7 @@ class LinkedEntitiesTable(EntitiesTable):
                 
             return field_value
 
-        gui_model = GUILinkedObject(linking_table, ['id', item_slave, *fields])
+        gui_model = GUILinkedObject(linking_table, [item_slave, *fields], {item_main: entity})
         self.set_model(gui_model, queryset, func_get_value)
 
 
