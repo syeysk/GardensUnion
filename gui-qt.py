@@ -501,6 +501,7 @@ class EntitiesTable(QVBoxLayout):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.func_click_on_entity = func_click_on_entity
         self.table.doubleClicked.connect(self.open_edit_dialog)
+        self.gui_model = None
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet('font-size: 20px; font-weight: bold;')
@@ -585,6 +586,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
+        self.dict_gui_button = {}
 
         def f(gui_model):
             def _f():
@@ -600,6 +602,7 @@ class MainWindow(QMainWindow):
             btn.setFixedWidth(120)
             btn.clicked.connect(f(gui_model))
             side_panel.addWidget(btn)
+            self.dict_gui_button[gui_model] = btn
 
         side_panel.addStretch()
         main_layout.addLayout(side_panel)
@@ -612,6 +615,11 @@ class MainWindow(QMainWindow):
         self.update_table(GUIHuman)
 
     def update_table(self, gui_model):
+        current_gui_model = self.table_view.gui_model
+        if current_gui_model:
+            self.dict_gui_button[current_gui_model].setDisabled(False)
+
+        self.dict_gui_button[gui_model].setDisabled(True)
         title = self.table_view.set_model(gui_model)
         self.setWindowTitle(title)
 
