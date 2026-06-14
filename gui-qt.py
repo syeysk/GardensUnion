@@ -219,8 +219,10 @@ class GUIEntity(QDialog):
         for field, widget in self.inputs.items():
             if isinstance(widget, IntegerQField):
                 values[field] = widget.value()
-            elif isinstance(widget, (QLineEdit, QTextEdit)):
+            elif isinstance(widget, QLineEdit):
                 values[field] = widget.text()
+            elif isinstance(widget, QTextEdit):
+                values[field] = widget.toPlainText()
             elif isinstance(widget, ForeignQField):
                 values[field] = widget.entity
             elif isinstance(widget, QCheckBox):
