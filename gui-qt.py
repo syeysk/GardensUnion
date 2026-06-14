@@ -1,19 +1,20 @@
 import os
 import sys
+
 import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
     QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea, QCheckBox, QTextEdit
 )
-from PyQt6.QtGui import QIntValidator
+from PyQt6.QtGui import QIntValidator, QIcon
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 django.setup()
 
-# from django.conf import settings
+from django.conf import settings
 from django.db.models import Q, ForeignKey, IntegerField, NOT_PROVIDED, BooleanField, TextField
 from db.models import (
     Community,
@@ -544,10 +545,8 @@ class EntitiesTable(QVBoxLayout):
     def set_model(self, gui_model, *args):
         self.gui_model = gui_model
         model = DjangoTableModel(gui_model.model, gui_model.table_fields, *args)
-        title = str(gui_model.model._meta.verbose_name_plural)
-        self.title_label.setText(title)
+        self.title_label.setText(str(gui_model.model._meta.verbose_name_plural))
         self.table.setModel(model)
-        return title
 
 
 class LinkedEntitiesTable(EntitiesTable):
@@ -584,6 +583,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         screen = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(0, 0, screen.width() // 2, screen.height() - 30)
+        self.setWindowTitle('HumanEnv - Your human environment')
+        self.setWindowIcon(QIcon(str(settings.BASE_DIR.parent / 'images/tie_butterfly.jpg')))
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -622,8 +623,7 @@ class MainWindow(QMainWindow):
             self.dict_gui_button[current_gui_model].setDisabled(False)
 
         self.dict_gui_button[gui_model].setDisabled(True)
-        title = self.table_view.set_model(gui_model)
-        self.setWindowTitle(title)
+        self.table_view.set_model(gui_model)
 
 
 if __name__ == "__main__":
