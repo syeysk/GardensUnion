@@ -4,7 +4,7 @@ import sys
 import django
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QTableView, QHeaderView, QLabel, QDialog, 
+    QPushButton, QTableView, QHeaderView, QLabel, QDialog, QMessageBox,
     QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea, QCheckBox, QTextEdit
 )
 from PyQt6.QtGui import QIntValidator, QIcon
@@ -153,22 +153,35 @@ class GUIEntity(QDialog):
         self.build_links()
 
     def save(self):
+        ''' Возвращает True при успешном сохранении, иначе - False '''
         data = self.get_data()
         if self.entity:
-            print('update', data)
             for field, value in data.items():
                 setattr(self.entity, field, value)
 
-            self.entity.save()
+            try:
+                self.entity.save()
+            except Exception as e:
+                self.show_error('при сохранении', str(e))
+                return False
         else:
-            print('create', data)
-            entity = self.model.objects.create(**data)
-            self.set_entity(entity)
+            try:
+                entity = self.model.objects.create(**data)
+            except Exception as e:
+                self.show_error('при создании', str(e))
+                return False
+            else:
+                self.set_entity(entity)
+
+        return True
 
     def save_and_close(self):
-        self.save()
-        self.accept()
-    
+        if self.save():
+            self.accept()
+
+    def show_error(self, description, message):
+        QMessageBox.critical(self, f'Ошибка {description}', message)
+
     def populate_form(self):
         for field_name, field in self.inputs.items():
             dj_field = self.model._meta.get_field(field_name)
