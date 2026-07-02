@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QDialogButtonBox, QAbstractItemView, QComboBox, QScrollArea, QCheckBox, QTextEdit
 )
 from PyQt6.QtGui import QIntValidator, QIcon
-from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
+from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex, pyqtSignal
 
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
@@ -92,6 +92,7 @@ class SelectEntitywindow(QDialog):
         self.setGeometry(0, 0, screen.width() // 3, 400)
         self.gui_model = gui_model
         table_view = EntitiesTable(func_click_on_entity=self.select_entity)
+        table_view.added_entity.connect(self.on_add_entity)
         table_view.set_model(self.gui_model)
 
         main_layout = QVBoxLayout(self)
@@ -100,6 +101,10 @@ class SelectEntitywindow(QDialog):
         self.entity = None
     
     def select_entity(self, entity):
+        self.entity = entity
+        self.close()
+
+    def on_add_entity(self, entity):
         self.entity = entity
         self.close()
 
@@ -497,6 +502,8 @@ class DjangoTableModel(QAbstractTableModel):
 
 
 class EntitiesTable(QVBoxLayout):
+    added_entity = pyqtSignal(object)
+
     def __init__(self, func_click_on_entity=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.table = QTableView()
@@ -531,7 +538,9 @@ class EntitiesTable(QVBoxLayout):
         (self.func_click_on_entity or default_open_edit_dialog)(entity)
 
     def open_add_dialog(self):
-        if self.gui_model().exec() == QDialog.DialogCode.Accepted:
+        gui_model = self.gui_model()
+        if gui_model.exec() == QDialog.DialogCode.Accepted:
+            self.added_entity.emit(gui_model.entity)
             self.table.model().refresh()
 
     def open_delete_dialog(self, _):
