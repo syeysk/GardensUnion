@@ -1,5 +1,5 @@
-from django.conf import settings
 from django.db import models
+from common.models import Tag
 
 CIRCLE_DEVELOP = 1
 CIRCLE_EFFECTIVITY = 2
@@ -63,6 +63,7 @@ class Sector(models.Model):
 
 
 class Human(models.Model):
+    CODE = 2
     family_name = models.CharField('Фамилия', max_length=100, blank=True)
     first_name = models.CharField('Имя', max_length=100, blank=True)
     father_name = models.CharField('Отчество', max_length=100, blank=True)
@@ -76,6 +77,7 @@ class Human(models.Model):
     book_did = models.IntegerField('Анализ ОИС', choices=BOOK_DID, default=BOOK_DID_UNKNOWN)
     notes = models.TextField('Заметки', max_length=10000, blank=True)
 
+    tags = models.ManyToManyField(Tag, related_name='humans')
     sector = models.ForeignKey(Sector, on_delete=models.CASCADE, related_name='humans', verbose_name='Сектор')
 
     def __str__(self):
@@ -112,7 +114,10 @@ class Contact(models.Model):
 
 
 class Community(models.Model):
+    CODE = 3
     name = models.CharField('Наименование', max_length=100)
+
+    tags = models.ManyToManyField(Tag, related_name='communities')
 
     def __str__(self):
         return self.name
