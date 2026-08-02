@@ -12,7 +12,8 @@ django.setup()
 from django.conf import settings
 
 from common.gui_entities_list import EntitiesList
-from common.gui_entity import GUIEntity, EntityWindow
+from common.gui_entity import GUIEntity
+from common.gui_entity_windows import EntityWindow
 from common.gui_main_window import MainWindow
 from db.gui_actions import ActionsHumanWidget
 from db.models import (
@@ -37,11 +38,7 @@ from db.models import (
 )
 
 
-class GUIHuman(GUIEntity):
-    dj_model = Human
-    table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['family_name', 'first_name']
+class HumanWindow(EntityWindow):
     links = (
         ((LinkContactHuman, 'contact'), {}),
         ((LinkHumanCommunity, 'community'), {}),
@@ -49,9 +46,6 @@ class GUIHuman(GUIEntity):
         ((LinkTaskHuman, 'task'), {}),
         ((LinkHumanHuman, 'human_linked'), {'fields': ['relation']}),
     )
-    actions_class = ActionsHumanWidget
-    field_order = 'family_name'
-    fields_search = ['family_name', 'first_name', 'father_name']
 
     def build_form(self):
         layout_left = QVBoxLayout()
@@ -74,6 +68,16 @@ class GUIHuman(GUIEntity):
         layout.addLayout(layout_fields)
         layout.addLayout(self.build_row('notes'))
         return layout
+
+
+class GUIHuman(GUIEntity):
+    dj_model = Human
+    table_class = EntitiesList
+    window_class = HumanWindow
+    table_fields = ['family_name', 'first_name']
+    actions_class = ActionsHumanWidget
+    field_order = 'family_name'
+    fields_search = ['family_name', 'first_name', 'father_name']
 
 
 class GUICommunity(GUIEntity):
@@ -181,17 +185,21 @@ class GUISector(GUIEntity):
         return layout
 
 
-class GUIHumanRelationType(GUIEntity):
-    dj_model = HumanRelationType
-    table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['name']
+class HumanRelationTypeWindow(EntityWindow):
+    links = []
 
     def build_form(self):
         layout = QVBoxLayout()
         layout_line = self.build_row('name')
         layout.addLayout(layout_line)
         return layout
+
+
+class GUIHumanRelationType(GUIEntity):
+    dj_model = HumanRelationType
+    table_class = EntitiesList
+    window_class = HumanRelationTypeWindow
+    table_fields = ['name']
 
 
 class GUITaskAim(GUIEntity):
