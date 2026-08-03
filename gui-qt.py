@@ -80,16 +80,11 @@ class GUIHuman(GUIEntity):
     fields_search = ['family_name', 'first_name', 'father_name']
 
 
-class GUICommunity(GUIEntity):
-    dj_model = Community
-    table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['name']
+class CommunityWindow(EntityWindow):
     links = (
         ((LinkHumanCommunity, 'human'), {}),
         ((LinkTaskCommunity, 'task'), {}),
     )
-
     def build_form(self):
         layout = QVBoxLayout()
         field_names = ['name']
@@ -100,17 +95,19 @@ class GUICommunity(GUIEntity):
         return layout
 
 
-class GUITask(GUIEntity):
-    dj_model = Task
+class GUICommunity(GUIEntity):
+    dj_model = Community
     table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['has_done', 'title']
+    window_class = CommunityWindow
+    table_fields = ['name']
+
+
+class TaskWindow(EntityWindow):
     links = (
         ((LinkTaskHuman, 'human'), {}),
         ((LinkTaskCommunity, 'community'), {}),
         ((LinkTaskMeeting, 'meeting'), {}),
     )
-
     def build_form(self):
         layout = QVBoxLayout()
         field_names = ['title', 'aim', 'has_done']
@@ -121,11 +118,14 @@ class GUITask(GUIEntity):
         return layout
 
 
-class GUIContact(GUIEntity):
-    dj_model = Contact
+class GUITask(GUIEntity):
+    dj_model = Task
     table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['type', 'value', 'status']
+    window_class = TaskWindow
+    table_fields = ['has_done', 'title']
+
+
+class ContactWindow(EntityWindow):
     links = (
         ((LinkContactHuman, 'human'), {}),
         ((LinkContactCommunity, 'community'), {}),
@@ -141,16 +141,18 @@ class GUIContact(GUIEntity):
         return layout
 
 
-class GUIMeeting(GUIEntity):
-    dj_model = Meeting
+class GUIContact(GUIEntity):
+    dj_model = Contact
     table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['title']
+    window_class = ContactWindow
+    table_fields = ['type', 'value', 'status']
+
+
+class MeetingWindow(EntityWindow):
     links = (
         ((LinkHumanMeeting, 'human'), {}),
         ((LinkTaskMeeting, 'task'), {}),
     )
-
     def build_form(self):
         layout = QVBoxLayout()
         field_names = ['title', 'description', 'date']
@@ -160,6 +162,13 @@ class GUIMeeting(GUIEntity):
 
         return layout
 
+
+class GUIMeeting(GUIEntity):
+    dj_model = Meeting
+    table_class = EntitiesList
+    window_class = MeetingWindow
+    table_fields = ['title']
+ 
 
 # class GUIDynamicOptions(GUIEntity):
 #     dj_model = None
@@ -171,13 +180,8 @@ class GUIMeeting(GUIEntity):
 #         layout.addLayout(layout_line)
 #         return layout
 
-
-class GUISector(GUIEntity):
-    dj_model = Sector
-    table_class = EntitiesList
-    window_class = EntityWindow
-    table_fields = ['name']
-
+class SectorWindow(EntityWindow):
+    links = []
     def build_form(self):
         layout = QVBoxLayout()
         layout_line = self.build_row('name')
@@ -185,9 +189,15 @@ class GUISector(GUIEntity):
         return layout
 
 
+class GUISector(GUIEntity):
+    dj_model = Sector
+    table_class = EntitiesList
+    window_class = EntityWindow
+    table_fields = ['name']
+
+
 class HumanRelationTypeWindow(EntityWindow):
     links = []
-
     def build_form(self):
         layout = QVBoxLayout()
         layout_line = self.build_row('name')
@@ -202,12 +212,24 @@ class GUIHumanRelationType(GUIEntity):
     table_fields = ['name']
 
 
+class TaskAimWindow(EntityWindow):
+    links = []
+    def build_form(self):
+        layout = QVBoxLayout()
+        layout_line = self.build_row('name')
+        layout.addLayout(layout_line)
+        return layout
+
+
 class GUITaskAim(GUIEntity):
     dj_model = TaskAim
     table_class = EntitiesList
     window_class = EntityWindow
     table_fields = ['name']
 
+
+class ContactTypeWindow(EntityWindow):
+    links = []
     def build_form(self):
         layout = QVBoxLayout()
         layout_line = self.build_row('name')
@@ -220,12 +242,6 @@ class GUIContactType(GUIEntity):
     table_class = EntitiesList
     window_class = EntityWindow
     table_fields = ['name']
-
-    def build_form(self):
-        layout = QVBoxLayout()
-        layout_line = self.build_row('name')
-        layout.addLayout(layout_line)
-        return layout
 
 
 class MainWindow(MainWindow):
