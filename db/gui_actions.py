@@ -8,9 +8,14 @@ from PyQt6.QtGui import QStandardItemModel, QStandardItem, QDrag, QPainter, QPal
 from PyQt6.QtCore import Qt, QModelIndex, pyqtSignal, QMimeData, QThread, pyqtSlot, QObject
 
 
+class CelebrateListWindow(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Не забудьте поздравить')
+
+
 class ActionsHumanWidget(QWidget):
     def __init__(self, main_window, parent=None):
-        # TODO: убрать padding или margin со всех таких виджетов!
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.main_window = main_window
@@ -20,4 +25,5 @@ class ActionsHumanWidget(QWidget):
         layout.addWidget(btn_show_holidays)
     
     def on_click_show_holidays(self):
-        pass
+        window = CelebrateListWindow()
+        window.exec()

@@ -90,7 +90,7 @@ class ForeignQField(QWidget):
 
     def open_entity_window(self):
         if self.entity:
-            if self.gui_model(self.entity).exec() == QDialog.DialogCode.Accepted:
+            if self.gui_model.window_class(self.gui_model.dj_model, self.entity).exec() == QDialog.DialogCode.Accepted:
                 self.btn_select.setText(str(self.entity))
 
     def open_select_window(self):

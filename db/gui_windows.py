@@ -180,7 +180,7 @@ class SectorWindow(EntityWindow):
 class GUISector(GUIEntity):
     dj_model = Sector
     table_class = EntitiesList
-    window_class = EntityWindow
+    window_class = SectorWindow
     table_fields = ['name']
 
 
@@ -212,7 +212,7 @@ class TaskAimWindow(EntityWindow):
 class GUITaskAim(GUIEntity):
     dj_model = TaskAim
     table_class = EntitiesList
-    window_class = EntityWindow
+    window_class = TaskAimWindow
     table_fields = ['name']
 
 
@@ -228,5 +228,5 @@ class ContactTypeWindow(EntityWindow):
 class GUIContactType(GUIEntity):
     dj_model = ContactType
     table_class = EntitiesList
-    window_class = EntityWindow
+    window_class = ContactTypeWindow
     table_fields = ['name']
