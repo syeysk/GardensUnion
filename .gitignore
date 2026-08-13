@@ -7,3 +7,4 @@ config.json
 .debug.log
 __init__.py
 .venv
+gardensunion.egg-info
