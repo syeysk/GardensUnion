@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtCore import pyqtSignal
 
-from common.gui_entities_list import EntitiesList
+from gardensunion.base.gui_entities_list import EntitiesList
 
 
 class SelectEntitywindow(QDialog):
@@ -119,7 +119,7 @@ class EntityWindow(QDialog):
         self.layout = QVBoxLayout(central_widget)
 
         if not self.DJ2GUI:
-            from common.gui_entity import GUIEntity
+            from gardensunion.base.gui_entity import GUIEntity
             self.DJ2GUI = {gui.dj_model: gui for gui in GUIEntity.__subclasses__()}
 
         layout_form = self.build_form()
@@ -257,7 +257,7 @@ class EntityWindow(QDialog):
         raise NotImplementedError
 
     def build_links(self):
-        from common_linked.gui_entities_list import LinkedEntitiesTable  # TODO: так не должно быть
+        from gardensunion.linked.gui_entities_list import LinkedEntitiesTable  # TODO: так не должно быть
         if self.layout_links:
             self.layout_links.remove()
 

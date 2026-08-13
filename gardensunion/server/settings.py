@@ -10,31 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import json
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Конфигурация программы
-
-BASE_REPO_DIR = BASE_DIR.parent
-EXAMPLE_CONFIG_PATH = BASE_REPO_DIR / 'config.example.json'
-CONFIG_PATH = BASE_REPO_DIR / 'config.json'
-
-if not CONFIG_PATH.exists():
-    if (hasattr(EXAMPLE_CONFIG_PATH, 'copy')):
-        EXAMPLE_CONFIG_PATH.copy(CONFIG_PATH) # since Python 3.14
-    else:
-        from shutil import copyfile
-        copyfile(EXAMPLE_CONFIG_PATH, CONFIG_PATH)
-
-with CONFIG_PATH.open(encoding='utf-8') as fjson:
-    data = json.load(fjson)
-    #STORAGE_NOTES = Path(data['storage_notes']).resolve()
-    TG_TOKEN = data['tg_token']
-
-del data, fjson
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -55,8 +35,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'common',
-    'common_linked',
+    'base',
+    'linked',
 ]
 
 MIDDLEWARE = [

@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QVBoxLayout
 
-from common.gui_entity_windows import EntityWindow
+from gardensunion.base.gui_entity_windows import EntityWindow
 
 
 class LinkedObjectWindow(EntityWindow):

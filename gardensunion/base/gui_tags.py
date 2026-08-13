@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QDrag
 from PyQt6.QtCore import Qt, QModelIndex, pyqtSignal, QMimeData
 
-from common.models import Tag
+from gardensunion.base.models import Tag
 
 __all__ = ['TaggedWidget', 'TaggsWidget']
 

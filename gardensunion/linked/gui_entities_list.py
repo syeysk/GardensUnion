@@ -1,8 +1,8 @@
 from django.db.models import Q
 
-from common.gui_entities_list import EntitiesList
-from common_linked.gui_entity import GUILinkedObject
-from common_linked.gui_entity_windows import LinkedObjectWindow
+from gardensunion.base.gui_entities_list import EntitiesList
+from gardensunion.linked.gui_entity import GUILinkedObject
+from gardensunion.linked.gui_entity_windows import LinkedObjectWindow
 
 
 class LinkedEntitiesTable(EntitiesList):

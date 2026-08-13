@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from common.gui_entity_types import EntityTypesWidget
-from common.gui_tags import TagsWidget
+from gardensunion.base.gui_entity_types import EntityTypesWidget
+from gardensunion.base.gui_tags import TagsWidget
 
 
 class MainWindow(QMainWindow):

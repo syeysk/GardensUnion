@@ -1,5 +1,5 @@
-from common.gui_entity import GUIEntity
-from common_linked.gui_entity_windows import LinkedObjectWindow
+from gardensunion.base.gui_entity import GUIEntity
+from gardensunion.linked.gui_entity_windows import LinkedObjectWindow
 
 
 class GUILinkedObject(GUIEntity):
