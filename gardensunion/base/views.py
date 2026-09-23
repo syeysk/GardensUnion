@@ -26,7 +26,7 @@ def get_tags(rows, dj_model, parent_id=None, deep=0):
     related_name = dj_field._related_name
     for dj_tag in list(Tag.objects.filter(parent_id=parent_id, code=dj_model.CODE)):
         entities = getattr(dj_tag, related_name)
-        rows.append({'count': entities.count(), 'name': dj_tag.name, 'id': dj_tag.pk, 'deep': deep})
+        rows[dj_tag.pk] = {'count': entities.count(), 'name': dj_tag.name, 'id': dj_tag.pk, 'deep': deep}
         get_tags(rows, dj_model, dj_tag.pk, deep + 1)
 
 
@@ -62,7 +62,7 @@ class EntityTypesView(APIView):
 
 class TagsView(APIView):
     def get(self, request, type_entity_code):
-        response_data = []
+        response_data = {}
         gui_model = settings.ENTITY_MODELS_BY_CODE[type_entity_code]
         get_tags(response_data, gui_model.dj_model)
         return Response(status=status.HTTP_200_OK, data=response_data)
@@ -70,27 +70,42 @@ class TagsView(APIView):
 
 class EntitiesView(APIView):
     def post(self, request, type_entity_code):
-        tags_id = None
-        search_text = ''
+        tags_id = request.data.get('tags', [])
+        search_text = request.data.get('s', '')
+        cur_page = request.data.get('p', 0)
+        count_on_page = 15
 
         headers = []
         entites = []
-        count_total = 0
         gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
-        if gui_model:
-            queryset = build_queryset_enitities(
-                gui_model.dj_model,
-                getattr(gui_model, 'field_order', 'pk'),
-                getattr(gui_model, 'field_search', []),
-                tags_id,
-                search_text,
-            )
-            count_total = queryset.count()
-            table_fields = getattr(gui_model, 'table_fields', [])
-            for entity in queryset:
-                entites.append({'id': entity.pk, 'row': tuple(str(getattr(entity, field_name)) for field_name in table_fields)})
+        if not gui_model:
+            return Response(status=status.HTTP_200_OK, data={'message': 'Не найдена модель'})
 
-        response_data = {'entites': entites, 'headers': headers, 'count_total': count_total}
+        queryset = build_queryset_enitities(
+            gui_model.dj_model,
+            getattr(gui_model, 'field_order', 'pk'),
+            getattr(gui_model, 'fields_search', []),
+            tags_id,
+            search_text,
+        )
+        count_total = queryset.count()
+        count_pages = (count_total // count_on_page) + (1 if count_total % count_on_page else 0)
+        cur_page = cur_page if 0 <= cur_page < count_pages else 0
+        table_fields = getattr(gui_model, 'table_fields', [])
+        for entity in list(queryset[cur_page * count_on_page:(cur_page * count_on_page) + count_on_page]):
+            row = tuple(str(getattr(entity, field_name)) for field_name in table_fields)
+            tags = {tag.id: {'name': tag.name, 'id': tag.id} for tag in entity.tags.order_by('name')}
+            entites.append({'id': entity.pk, 'row': row, 'tags': tags})
+
+        response_data = {
+            'entites': entites,
+            'headers': headers,
+            'count_entites_total': count_total,
+            'cur_page': cur_page,
+            'count_pages': count_pages,
+            'prev_page': cur_page - 1 if cur_page > 0 else count_pages - 1,
+            'next_page': cur_page + 1 if cur_page < count_pages else 0,
+        }
         return Response(status=status.HTTP_200_OK, data=response_data)
 
     def put(self, request, type_entity_code):
@@ -153,27 +168,48 @@ class GetCreatingEntityFormView(APIView):
         fields = []
         gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
         dj_model = gui_model.dj_model
-        if gui_model:
-            response_data = {
-                'window': getattr(gui_model,'window_name', 'default'),
-                'fields': fields,
-                'title': dj_model._meta.verbose_name,
-            }
-            for field_name in getattr(gui_model, 'window_fields', ['id']):
-                dj_field = dj_model._meta.get_field(field_name)
-                choices = dj_field.choices
-                default_value = ''
-                if isinstance(dj_field, ForeignKey):
-                    default_value = [1, '']
-                fields.append(
-                    {
-                        'title': dj_field.verbose_name.capitalize(),
-                        'name': field_name,
-                        'value': default_value,
-                        'type': '',
-                    }
-                )
-        else:  # TODO: Удалить, отдавать 404 или типа того
+        if not gui_model:
             response_data = {'window': 'default', 'fields': fields}
 
+        response_data = {
+            'window': getattr(gui_model,'window_name', 'default'),
+            'fields': fields,
+            'title': dj_model._meta.verbose_name,
+        }
+        for field_name in getattr(gui_model, 'window_fields', ['id']):
+            dj_field = dj_model._meta.get_field(field_name)
+            choices = dj_field.choices
+            default_value = ''
+            if isinstance(dj_field, ForeignKey):
+                default_value = [1, '']
+            fields.append(
+                {
+                    'title': dj_field.verbose_name.capitalize(),
+                    'name': field_name,
+                    'value': default_value,
+                    'type': '',
+                }
+            )
+
         return Response(status=status.HTTP_200_OK, data=response_data)
+
+
+class EntityTagView(APIView):
+    def delete(self, request, type_entity_code, entity_id, tag_id):
+        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        dj_model = gui_model.dj_model
+        entity = dj_model.objects.filter(pk=entity_id).first()
+        tag = entity.tags.filter(pk=tag_id).first()
+        entity.tags.remove(tag)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def put(self, request, type_entity_code, entity_id, tag_id):
+        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        dj_model = gui_model.dj_model
+        entity = dj_model.objects.filter(pk=entity_id).first()
+        tag = entity.tags.filter(pk=tag_id).first()
+        if not tag:
+            tag = Tag.objects.filter(pk=tag_id).first()
+            entity.tags.add(tag)
+
+        return Response(status=status.HTTP_200_OK, data={'id': tag.id, 'name': tag.name})

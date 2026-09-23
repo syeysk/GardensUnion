@@ -24,5 +24,5 @@ class EntityCreateSerializer(serializers.ModelSerializer):
         model = None
         fields = []
 
-    def create(self, validated_data):
-        return self.Meta.model.objects.create(**validated_data)
+    # def create(self, validated_data):
+    #     return self.Meta.model.objects.create(**validated_data)
