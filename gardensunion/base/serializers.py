@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from gardensunion.base.models import Tag
+
 
 class EntityUpdateSerializer(serializers.ModelSerializer):
     def __init__(self, model, fields, *args, **kwargs):
@@ -24,5 +26,14 @@ class EntityCreateSerializer(serializers.ModelSerializer):
         model = None
         fields = []
 
-    # def create(self, validated_data):
-    #     return self.Meta.model.objects.create(**validated_data)
+
+class TagEditSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['name']
+
+
+class TagCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ['name', 'parent']

@@ -6,7 +6,12 @@ from rest_framework.views import APIView
 from rest_framework import status
 
 from gardensunion.base.models import Tag
-from gardensunion.base.serializers import EntityCreateSerializer, EntityUpdateSerializer
+from gardensunion.base.serializers import (
+    EntityCreateSerializer,
+    EntityUpdateSerializer,
+    TagEditSerializer,
+    TagCreateSerializer,
+)
 
 for gui_model_str in settings.ENTITY_TYPES:
     names_list = gui_model_str.split('.')
@@ -26,7 +31,13 @@ def get_tags(rows, dj_model, parent_id=None, deep=0):
     related_name = dj_field._related_name
     for dj_tag in list(Tag.objects.filter(parent_id=parent_id, code=dj_model.CODE)):
         entities = getattr(dj_tag, related_name)
-        rows[dj_tag.pk] = {'count': entities.count(), 'name': dj_tag.name, 'id': dj_tag.pk, 'deep': deep}
+        rows.append({
+            'count': entities.count(),
+            'name': dj_tag.name,
+            'id': dj_tag.pk,
+            'deep': deep,
+            'parent': dj_tag.parent.pk if dj_tag.parent else None,
+        })
         get_tags(rows, dj_model, dj_tag.pk, deep + 1)
 
 
@@ -62,10 +73,39 @@ class EntityTypesView(APIView):
 
 class TagsView(APIView):
     def get(self, request, type_entity_code):
-        response_data = {}
+        response_data = []
         gui_model = settings.ENTITY_MODELS_BY_CODE[type_entity_code]
         get_tags(response_data, gui_model.dj_model)
         return Response(status=status.HTTP_200_OK, data=response_data)
+    
+    def put(self, request, type_entity_code):
+        serializer = TagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tag = serializer.save(code=type_entity_code)
+        return Response(status=status.HTTP_201_CREATED, data=tag.id)
+
+
+class TagView(APIView):
+    def post(self, request, type_entity_code, tag_id):
+        tag = Tag.objects.filter(code=type_entity_code, pk=tag_id).first()
+        if not tag:
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'wrong tag id'})
+
+        serializer = TagEditSerializer(tag, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def delete(self, request, type_entity_code, tag_id):
+        tag = Tag.objects.filter(code=type_entity_code, pk=tag_id).first()
+        if not tag:
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'wrong tag id'})
+
+        if tag.files.count() or tag.children.count():          
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'tag has not have child tags or files'})
+
+        tag.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class EntitiesView(APIView):
