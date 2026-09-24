@@ -159,7 +159,7 @@ class EntitiesView(APIView):
 
 class EntityView(APIView):
     def get(self, request, type_entity_code, entity_id):
-        fields = []
+        fields = {}
         gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
         if gui_model:
             dj_model = gui_model.dj_model
@@ -175,14 +175,18 @@ class EntityView(APIView):
                 value = getattr(entity, field_name)
                 if isinstance(dj_field, ForeignKey):
                     value = [value.pk if value else None, str(value)]
-                fields.append(
-                    {
-                        'title': dj_field.verbose_name.capitalize(),
-                        'name': field_name,
-                        'value': value,
-                        'type': '',
-                    }
-                )
+
+                fields[field_name] = {
+                    'title': dj_field.verbose_name.capitalize(),
+                    'name': field_name,
+                    'value': value,
+                    'type': '',
+                }
+
+            func_extra_fields = getattr(gui_model, 'populate_extra_window_fields')
+            if func_extra_fields:
+                func_extra_fields(entity, fields)
+
         else:  # TODO: Удалить, отдавать 404 или типа того
             response_data = {'window': 'default', 'fields': fields}
 
