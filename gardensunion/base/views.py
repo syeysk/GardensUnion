@@ -97,11 +97,16 @@ class TagView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def delete(self, request, type_entity_code, tag_id):
+        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        if not gui_model:
+            return Response(status=status.HTTP_200_OK, data={'message': 'Не найдена модель'})
+
         tag = Tag.objects.filter(code=type_entity_code, pk=tag_id).first()
         if not tag:
             return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'wrong tag id'})
 
-        if tag.files.count() or tag.children.count():          
+        field_tags = gui_model.dj_model._meta.get_field('tags')
+        if getattr(tag, field_tags._related_name).count() or tag.children.count():          
             return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'tag has not have child tags or files'})
 
         tag.delete()
@@ -113,7 +118,7 @@ class EntitiesView(APIView):
         tags_id = request.data.get('tags', [])
         search_text = request.data.get('s', '')
         cur_page = request.data.get('p', 0)
-        count_on_page = 15
+        count_on_page = 30
 
         headers = []
         entites = []
@@ -145,6 +150,7 @@ class EntitiesView(APIView):
             'count_pages': count_pages,
             'prev_page': cur_page - 1 if cur_page > 0 else count_pages - 1,
             'next_page': cur_page + 1 if cur_page < count_pages else 0,
+            'table_name': getattr(gui_model, 'table_name', 'default'),
         }
         return Response(status=status.HTTP_200_OK, data=response_data)
 
@@ -211,10 +217,10 @@ class GetCreatingEntityFormView(APIView):
     def get(self, request, type_entity_code):
         fields = []
         gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
-        dj_model = gui_model.dj_model
         if not gui_model:
             response_data = {'window': 'default', 'fields': fields}
 
+        dj_model = gui_model.dj_model
         response_data = {
             'window': getattr(gui_model,'window_name', 'default'),
             'fields': fields,
@@ -257,3 +263,12 @@ class EntityTagView(APIView):
             entity.tags.add(tag)
 
         return Response(status=status.HTTP_200_OK, data={'id': tag.id, 'name': tag.name})
+
+
+class ActionsView(APIView):
+    def get(self, request, type_entity_code):
+        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        if not gui_model:
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'Model was not found'})
+
+        return Response(status=status.HTTP_200_OK, data=getattr(gui_model, 'actions', {}))
