@@ -1,11 +1,10 @@
-from django.conf import settings
-from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Q, Count, ForeignKey, BooleanField, IntegerField, TextField, NOT_PROVIDED
+from django.db.models import Q, Count, ForeignKey
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
 from gardensunion.base.models import Tag
+from gardensunion.base.utils import get_dj_model, get_related_name_for_tag
 from gardensunion.base.serializers import (
     EntityCreateSerializer,
     EntityUpdateSerializer,
@@ -13,22 +12,10 @@ from gardensunion.base.serializers import (
     TagCreateSerializer,
 )
 
-for gui_model_str in settings.ENTITY_TYPES:
-    names_list = gui_model_str.split('.')
-    package_list, gui_model_name = '.'.join(names_list[:-1]), names_list[-1]
-    package = __import__(package_list, fromlist=[gui_model_name])
-    gui_model = getattr(package, gui_model_name)
-    settings.ENTITY_MODELS_BY_CODE[gui_model.dj_model.CODE] = gui_model
 
 
 def get_tags(rows, dj_model, parent_id=None, deep=0):
-    try:
-        dj_field = dj_model._meta.get_field('tags')
-    except FieldDoesNotExist:
-        print(f'У django-модели {dj_model.__name__} должно быть поле "tags" для поддержки тегов')
-        return
-
-    related_name = dj_field._related_name
+    related_name = get_related_name_for_tag(dj_model)
     for dj_tag in list(Tag.objects.filter(parent_id=parent_id, code=dj_model.CODE)):
         entities = getattr(dj_tag, related_name)
         rows.append({
@@ -64,7 +51,7 @@ def build_queryset_enitities(model, field_order, fields_search, tags=None, searc
 class EntityTypesView(APIView):
     def get(self, request):
         response_data = []
-        for gui_model in settings.ENTITY_MODELS_BY_CODE.values():
+        for gui_model in get_dj_model().values():
             model = gui_model.dj_model
             response_data.append({'name_plural': model._meta.verbose_name_plural, 'name': model._meta.verbose_name, 'code': model.CODE})
 
@@ -74,7 +61,7 @@ class EntityTypesView(APIView):
 class TagsView(APIView):
     def get(self, request, type_entity_code):
         response_data = []
-        gui_model = settings.ENTITY_MODELS_BY_CODE[type_entity_code]
+        gui_model = get_dj_model(type_entity_code)
         get_tags(response_data, gui_model.dj_model)
         return Response(status=status.HTTP_200_OK, data=response_data)
     
@@ -97,7 +84,7 @@ class TagView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def delete(self, request, type_entity_code, tag_id):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         if not gui_model:
             return Response(status=status.HTTP_200_OK, data={'message': 'Не найдена модель'})
 
@@ -122,7 +109,7 @@ class EntitiesView(APIView):
 
         headers = []
         entites = []
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         if not gui_model:
             return Response(status=status.HTTP_200_OK, data={'message': 'Не найдена модель'})
 
@@ -155,7 +142,7 @@ class EntitiesView(APIView):
         return Response(status=status.HTTP_200_OK, data=response_data)
 
     def put(self, request, type_entity_code):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         # TODO: Если не сущестует модели, то отдавать ошибку с текстом "Сущность с таким ID не существует"
         serializer = EntityCreateSerializer(gui_model.dj_model, gui_model.table_fields, data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -166,7 +153,7 @@ class EntitiesView(APIView):
 class EntityView(APIView):
     def get(self, request, type_entity_code, entity_id):
         fields = {}
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         if gui_model:
             dj_model = gui_model.dj_model
             entity = dj_model.objects.filter(pk=entity_id).first()
@@ -199,7 +186,7 @@ class EntityView(APIView):
         return Response(status=status.HTTP_200_OK, data=response_data)
 
     def post(self, request, type_entity_code, entity_id):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         entity = gui_model.dj_model.objects.filter(id=entity_id).first()
         response_data = {}
         serializer = EntityUpdateSerializer(gui_model.dj_model, gui_model.table_fields, entity, data=request.data, partial=True)
@@ -216,7 +203,7 @@ class EntityView(APIView):
 class GetCreatingEntityFormView(APIView):
     def get(self, request, type_entity_code):
         fields = []
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         if not gui_model:
             response_data = {'window': 'default', 'fields': fields}
 
@@ -246,7 +233,7 @@ class GetCreatingEntityFormView(APIView):
 
 class EntityTagView(APIView):
     def delete(self, request, type_entity_code, entity_id, tag_id):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         dj_model = gui_model.dj_model
         entity = dj_model.objects.filter(pk=entity_id).first()
         tag = entity.tags.filter(pk=tag_id).first()
@@ -254,7 +241,7 @@ class EntityTagView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def put(self, request, type_entity_code, entity_id, tag_id):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         dj_model = gui_model.dj_model
         entity = dj_model.objects.filter(pk=entity_id).first()
         tag = entity.tags.filter(pk=tag_id).first()
@@ -267,7 +254,7 @@ class EntityTagView(APIView):
 
 class ActionsView(APIView):
     def get(self, request, type_entity_code):
-        gui_model = settings.ENTITY_MODELS_BY_CODE.get(type_entity_code)
+        gui_model = get_dj_model(type_entity_code)
         if not gui_model:
             return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'Model was not found'})
 
