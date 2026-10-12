@@ -1,4 +1,4 @@
-from django.db.models import Q, Count, ForeignKey
+from django.db.models import Q, Count, ForeignKey, IntegerField, CharField
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -11,7 +11,6 @@ from gardensunion.base.serializers import (
     TagEditSerializer,
     TagCreateSerializer,
 )
-
 
 
 def get_tags(rows, dj_model, parent_id=None, deep=0):
@@ -166,17 +165,31 @@ class EntityView(APIView):
                 dj_field = dj_model._meta.get_field(field_name)
                 choices = dj_field.choices
                 value = getattr(entity, field_name)
-                if isinstance(dj_field, ForeignKey):
-                    value = [value.pk if value else None, str(value)]
+                field_type = ''
+                extra = {}
+                if choices:
+                    field_type = 'Listdown'
+                    extra['choices'] = dict(choices)
+                elif isinstance(dj_field, ForeignKey):
+                    extra['value_str'] = str(value)
+                    value = value.pk if value else None
+                    field_type = 'Foreign'
+                elif isinstance(dj_field, IntegerField):
+                    field_type = 'Integer'
+                elif isinstance(dj_field, CharField):
+                    field_type = 'String'
+                else:
+                    print('Unknown type:', type(dj_field))
 
                 fields[field_name] = {
                     'title': dj_field.verbose_name.capitalize(),
                     'name': field_name,
                     'value': value,
-                    'type': '',
+                    'type': field_type,
+                    **extra,
                 }
 
-            func_extra_fields = getattr(gui_model, 'populate_extra_window_fields')
+            func_extra_fields = getattr(gui_model, 'populate_extra_window_fields', None)
             if func_extra_fields:
                 func_extra_fields(entity, fields)
 
@@ -189,6 +202,7 @@ class EntityView(APIView):
         gui_model = get_dj_model(type_entity_code)
         entity = gui_model.dj_model.objects.filter(id=entity_id).first()
         response_data = {}
+        # TODO: автоматически собирать поля вместо `gui_model.table_fields` или указать '__all__'
         serializer = EntityUpdateSerializer(gui_model.dj_model, gui_model.table_fields, entity, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
