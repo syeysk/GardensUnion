@@ -4,7 +4,6 @@ from django.core.exceptions import FieldDoesNotExist
 
 def get_dj_model(entity_type_code=None):
     if not settings.ENTITY_MODELS_BY_CODE:
-        print('+++ created')
         for gui_model_str in settings.ENTITY_TYPES:
             names_list = gui_model_str.split('.')
             package_list, gui_model_name = '.'.join(names_list[:-1]), names_list[-1]

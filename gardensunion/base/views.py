@@ -51,8 +51,11 @@ class EntityTypesView(APIView):
     def get(self, request):
         response_data = []
         for gui_model in get_dj_model().values():
-            model = gui_model.dj_model
-            response_data.append({'name_plural': model._meta.verbose_name_plural, 'name': model._meta.verbose_name, 'code': model.CODE})
+            if getattr(gui_model, 'show_on_main', True):
+                model = gui_model.dj_model
+                response_data.append(
+                    {'name_plural': model._meta.verbose_name_plural, 'name': model._meta.verbose_name, 'code': model.CODE},
+                )
 
         return Response(status=status.HTTP_200_OK, data=response_data)
 
@@ -125,7 +128,12 @@ class EntitiesView(APIView):
         table_fields = getattr(gui_model, 'table_fields', [])
         for entity in list(queryset[cur_page * count_on_page:(cur_page * count_on_page) + count_on_page]):
             row = tuple(str(getattr(entity, field_name)) for field_name in table_fields)
-            tags = {tag.id: {'name': tag.name, 'id': tag.id} for tag in entity.tags.order_by('name')}
+            tags_queryset = getattr(entity, 'tags', None)
+            if tags_queryset:
+                tags = {tag.id: {'name': tag.name, 'id': tag.id} for tag in tags_queryset.order_by('name')}
+            else:
+                tags = {}
+
             entites.append({'id': entity.pk, 'row': row, 'tags': tags})
 
         response_data = {
@@ -172,6 +180,7 @@ class EntityView(APIView):
                     extra['choices'] = dict(choices)
                 elif isinstance(dj_field, ForeignKey):
                     extra['value_str'] = str(value)
+                    extra['entity_type_code'] = getattr(dj_field.remote_field.model, 'CODE', None)
                     value = value.pk if value else None
                     field_type = 'Foreign'
                 elif isinstance(dj_field, IntegerField):
