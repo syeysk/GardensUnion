@@ -151,7 +151,7 @@ class EntitiesView(APIView):
     def put(self, request, type_entity_code):
         gui_model = get_dj_model(type_entity_code)
         # TODO: Если не сущестует модели, то отдавать ошибку с текстом "Сущность с таким ID не существует"
-        serializer = EntityCreateSerializer(gui_model.dj_model, gui_model.table_fields, data=request.data)
+        serializer = EntityCreateSerializer(gui_model.dj_model, data=request.data)
         serializer.is_valid(raise_exception=True)
         entity = serializer.save()
         return Response(status=status.HTTP_200_OK, data={'id': entity.id})
@@ -211,8 +211,7 @@ class EntityView(APIView):
         gui_model = get_dj_model(type_entity_code)
         entity = gui_model.dj_model.objects.filter(id=entity_id).first()
         response_data = {}
-        # TODO: автоматически собирать поля вместо `gui_model.table_fields` или указать '__all__'
-        serializer = EntityUpdateSerializer(gui_model.dj_model, gui_model.table_fields, entity, data=request.data, partial=True)
+        serializer = EntityUpdateSerializer(gui_model.dj_model, entity, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
         response_data['updated_fields'] = [
@@ -240,14 +239,30 @@ class GetCreatingEntityFormView(APIView):
             dj_field = dj_model._meta.get_field(field_name)
             choices = dj_field.choices
             default_value = ''
-            if isinstance(dj_field, ForeignKey):
-                default_value = [1, '']
+            extra = {}
+            if choices:
+                field_type = 'Listdown'
+                extra['choices'] = dict(choices)
+            elif isinstance(dj_field, ForeignKey):
+                extra['value_str'] = ''
+                extra['entity_type_code'] = getattr(dj_field.remote_field.model, 'CODE', None)
+                default_value = None
+                field_type = 'Foreign'
+            elif isinstance(dj_field, IntegerField):
+                field_type = 'Integer'
+                default_value = 0
+            elif isinstance(dj_field, CharField):
+                field_type = 'String'
+            else:
+                print('Unknown type:', type(dj_field))
+
             fields.append(
                 {
                     'title': dj_field.verbose_name.capitalize(),
                     'name': field_name,
                     'value': default_value,
-                    'type': '',
+                    'type': field_type,
+                    **extra,
                 }
             )
 
@@ -282,3 +297,11 @@ class ActionsView(APIView):
             return Response(status=status.HTTP_400_BAD_REQUEST, data={'message': 'Model was not found'})
 
         return Response(status=status.HTTP_200_OK, data=getattr(gui_model, 'actions', {}))
+
+
+class RepresentationView(APIView):
+    def get(self, request, type_entity_code, entity_id):
+        gui_model = get_dj_model(type_entity_code)
+        # TODO: Если не сущестует модели, то отдавать ошибку с текстом "Сущность с таким ID не существует"
+        entity = gui_model.dj_model.objects.filter(pk=entity_id).first()
+        return Response(status=status.HTTP_200_OK, data={'representation': str(entity)})

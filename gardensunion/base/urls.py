@@ -8,6 +8,7 @@ from gardensunion.base.views import (
     EntityTagView,
     GetCreatingEntityFormView,
     ActionsView,
+    RepresentationView,
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     path('type/<int:type_entity_code>/entity/', EntitiesView.as_view(), name='enitities'),
     path('type/<int:type_entity_code>/entity/<int:entity_id>/', EntityView.as_view(), name='enitity'),
     path('type/<int:type_entity_code>/entity/<int:entity_id>/tag/<int:tag_id>/', EntityTagView.as_view(), name='entity_tag'),
+    path('type/<int:type_entity_code>/entity/<int:entity_id>/representation/', RepresentationView.as_view(), name='entity_representation'),
 ]
