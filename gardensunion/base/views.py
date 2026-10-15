@@ -151,7 +151,7 @@ class EntitiesView(APIView):
     def put(self, request, type_entity_code):
         gui_model = get_dj_model(type_entity_code)
         # TODO: Если не сущестует модели, то отдавать ошибку с текстом "Сущность с таким ID не существует"
-        serializer = EntityCreateSerializer(gui_model.dj_model, data=request.data)
+        serializer = EntityCreateSerializer(gui_model.dj_model, gui_model.window_fields, data=request.data)
         serializer.is_valid(raise_exception=True)
         entity = serializer.save()
         return Response(status=status.HTTP_200_OK, data={'id': entity.id})
@@ -211,7 +211,7 @@ class EntityView(APIView):
         gui_model = get_dj_model(type_entity_code)
         entity = gui_model.dj_model.objects.filter(id=entity_id).first()
         response_data = {}
-        serializer = EntityUpdateSerializer(gui_model.dj_model, entity, data=request.data, partial=True)
+        serializer = EntityUpdateSerializer(gui_model.dj_model, gui_model.window_fields, entity, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
         response_data['updated_fields'] = [

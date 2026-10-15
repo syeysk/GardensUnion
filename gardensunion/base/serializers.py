@@ -5,30 +5,22 @@ from gardensunion.base.models import Tag
 
 
 class EntityUpdateSerializer(serializers.ModelSerializer):
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model, fields, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.model = model
         self.Meta.model = model
-        try:
-            model._meta.get_field('tags')
-            self.Meta.exclude = ['tags']
-        except FieldDoesNotExist:
-            self.Meta.fields = '__all__'
+        self.Meta.fields = fields
 
     class Meta:
         model = None
 
 
 class EntityCreateSerializer(serializers.ModelSerializer):
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model, fields, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.model = model
         self.Meta.model = model
-        try:
-            model._meta.get_field('tags')
-            self.Meta.exclude = ['tags']
-        except FieldDoesNotExist:
-            self.Meta.fields = '__all__'
+        self.Meta.fields = fields
 
     class Meta:
         model = None
