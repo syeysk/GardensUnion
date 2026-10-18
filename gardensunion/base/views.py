@@ -1,4 +1,4 @@
-from django.db.models import Q, Count, ForeignKey, IntegerField, CharField
+from django.db.models import Q, Count, ForeignKey, IntegerField, CharField, DateTimeField
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -104,6 +104,10 @@ class TagView(APIView):
 
 class EntitiesView(APIView):
     def post(self, request, type_entity_code):
+        '''
+           Возвращает список сущностей.
+           Используется метод POST вместо GET, так как в теле запроса передаётся список ID тегов
+        '''
         tags_id = request.data.get('tags', [])
         search_text = request.data.get('s', '')
         cur_page = request.data.get('p', 0)
@@ -187,6 +191,9 @@ class EntityView(APIView):
                     field_type = 'Integer'
                 elif isinstance(dj_field, CharField):
                     field_type = 'String'
+                elif isinstance(dj_field, DateTimeField):
+                    field_type = 'Datetime'
+                    value = value.strftime('%Y-%m-%d %H:%M:%S') if value else None
                 else:
                     print('Unknown type:', type(dj_field))
 
@@ -210,16 +217,21 @@ class EntityView(APIView):
     def post(self, request, type_entity_code, entity_id):
         gui_model = get_dj_model(type_entity_code)
         entity = gui_model.dj_model.objects.filter(id=entity_id).first()
-        response_data = {}
         serializer = EntityUpdateSerializer(gui_model.dj_model, gui_model.window_fields, entity, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-
-        response_data['updated_fields'] = [
-            name for name, value in serializer.validated_data.items() if getattr(entity, name) != value
-        ]
+        response_data = {
+            'updated_fields': [
+                name for name, value in serializer.validated_data.items() if getattr(entity, name) != value
+            ]
+        }
         serializer.save()
-
         return Response(status=status.HTTP_200_OK, data=response_data)
+
+    def delete(self, request, type_entity_code, entity_id):
+        gui_model = get_dj_model(type_entity_code)
+        entity = gui_model.dj_model.objects.filter(id=entity_id).first()
+        entity.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class GetCreatingEntityFormView(APIView):

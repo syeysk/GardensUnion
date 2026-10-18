@@ -2,16 +2,14 @@ from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
 
 
-def get_dj_model(entity_type_code=None):
-    if not settings.ENTITY_MODELS_BY_CODE:
-        for gui_model_str in settings.ENTITY_TYPES:
-            names_list = gui_model_str.split('.')
-            package_list, gui_model_name = '.'.join(names_list[:-1]), names_list[-1]
-            package = __import__(package_list, fromlist=[gui_model_name])
-            gui_model = getattr(package, gui_model_name)
-            settings.ENTITY_MODELS_BY_CODE[gui_model.dj_model.CODE] = gui_model
-
+def get_dj_model(entity_type_code=None):  # TODO: rename to `get_gui_model`
     return settings.ENTITY_MODELS_BY_CODE.get(entity_type_code) if entity_type_code else settings.ENTITY_MODELS_BY_CODE
+
+
+def register_gui(module, *gui_models):
+    for gui_model_str in gui_models:
+        gui_model = getattr(module, gui_model_str)
+        settings.ENTITY_MODELS_BY_CODE[gui_model.dj_model.CODE] = gui_model
 
 
 def get_related_name_for_tag(dj_model):

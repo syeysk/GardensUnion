@@ -1,7 +1,9 @@
-from django.core.exceptions import FieldDoesNotExist 
 from rest_framework import serializers
 
 from gardensunion.base.models import Tag
+
+
+# TODO: Оставить только по одному сериализатору
 
 
 class EntityUpdateSerializer(serializers.ModelSerializer):
