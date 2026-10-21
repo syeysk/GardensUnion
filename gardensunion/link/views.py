@@ -166,7 +166,7 @@ class GetCreatingLinkFormView(APIView):
             },
         }
         response_data = {
-            'window': getattr(gui_model,'window_name', 'default'),
+            'window': 'default',
             'fields': fields,
             'title': 'Связь',
         }
