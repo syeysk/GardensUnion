@@ -1,4 +1,5 @@
 from django.db.models import Q, Count, ForeignKey, IntegerField, CharField, DateTimeField
+from django.db.models.fields import NOT_PROVIDED
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -262,10 +263,10 @@ class GetCreatingEntityFormView(APIView):
                 field_type = 'Foreign'
             elif isinstance(dj_field, IntegerField):
                 field_type = 'Integer'
-                default_value = 0 if dj_field.default is None else dj_field.default
+                default_value = 0 if (dj_field.default is None or dj_field.default is NOT_PROVIDED) else dj_field.default
             elif isinstance(dj_field, CharField):
                 field_type = 'String'
-                default_value = '' if dj_field.default is None else dj_field.default
+                default_value = '' if (dj_field.default is None or dj_field.default is NOT_PROVIDED) else dj_field.default
             else:
                 print('Unknown type:', type(dj_field))
 
