@@ -262,9 +262,10 @@ class GetCreatingEntityFormView(APIView):
                 field_type = 'Foreign'
             elif isinstance(dj_field, IntegerField):
                 field_type = 'Integer'
-                default_value = 0
+                default_value = 0 if dj_field.default is None else dj_field.default
             elif isinstance(dj_field, CharField):
                 field_type = 'String'
+                default_value = '' if dj_field.default is None else dj_field.default
             else:
                 print('Unknown type:', type(dj_field))
 
