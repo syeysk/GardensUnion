@@ -114,7 +114,6 @@ class EntitiesView(APIView):
         cur_page = request.data.get('p', 0)
         count_on_page = 30
 
-        headers = []
         entites = []
         gui_model = get_dj_model(type_entity_code)
         if not gui_model:
@@ -140,6 +139,11 @@ class EntitiesView(APIView):
                 tags = {}
 
             entites.append({'id': entity.pk, 'row': row, 'tags': tags})
+
+        headers = []
+        for field_name in table_fields:
+            field = gui_model.dj_model._meta.get_field(field_name)
+            headers.append(field.verbose_name)
 
         response_data = {
             'entites': entites,
